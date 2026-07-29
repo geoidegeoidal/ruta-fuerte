@@ -1,5 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import {
+  cloudConfigured,
+  readCloudStore,
+  supabase,
+  writeCloudStore,
+  type CloudUser,
+} from "./cloud";
 import "./styles.css";
 
 type View = "hoy" | "historial" | "evolucion" | "logros" | "plan";
@@ -21,9 +28,17 @@ type LogEntry = {
 type Store = {
   logs: LogEntry[];
   checks: Record<string, boolean>;
+  loads: Record<string, LoadProgress>;
+  loadHistory: { date: string; name: string; kg: number }[];
   startedAt: string;
 };
-type Exercise = { name: string; prescription: string; note?: string };
+type LoadProgress = { kg: number; initialKg: number; comfortableDates: string[] };
+type Exercise = {
+  name: string;
+  prescription: string;
+  note?: string;
+  load?: { initial: number; step: number; fixed?: boolean };
+};
 
 const STORE_KEY = "ruta-fuerte-data-v2";
 const today = () => new Date().toLocaleDateString("en-CA");
@@ -41,12 +56,12 @@ const sessions: Record<SessionKey, {
     blocks: [
       { time: "0–10", title: "Calentamiento", exercises: [{ name: "Bicicleta reclinada o caminadora", prescription: "10 min · suave", note: "Debes poder conversar." }] },
       { time: "10–45", title: "Cuerpo completo", exercises: [
-        { name: "Prensa de piernas", prescription: "2 × 10–12" },
-        { name: "Press de pecho en máquina", prescription: "2 × 10–12" },
-        { name: "Remo sentado", prescription: "2 × 10–12" },
-        { name: "Curl femoral", prescription: "2 × 10–12" },
-        { name: "Jalón al pecho", prescription: "2 × 10–12" },
-        { name: "Elevación de talones", prescription: "2 × 12–15" },
+          { name: "Prensa de piernas", prescription: "2 × 10–12", load: { initial: 20, step: 5 } },
+          { name: "Press de pecho en máquina", prescription: "2 × 10–12", load: { initial: 5, step: 5 } },
+          { name: "Remo sentado", prescription: "2 × 10–12", load: { initial: 10, step: 5 } },
+          { name: "Curl femoral", prescription: "2 × 10–12", load: { initial: 5, step: 5 } },
+          { name: "Jalón al pecho", prescription: "2 × 10–12", load: { initial: 10, step: 5 } },
+          { name: "Elevación de talones", prescription: "2 × 12–15", load: { initial: 20, step: 5 } },
       ]},
       { time: "45–60", title: "Cardio + vuelta a la calma", exercises: [
         { name: "Bicicleta o caminadora", prescription: "10 min · moderado" },
@@ -59,12 +74,12 @@ const sessions: Record<SessionKey, {
     blocks: [
       { time: "0–10", title: "Calentamiento", exercises: [{ name: "Bicicleta reclinada o caminadora", prescription: "10 min · suave" }] },
       { time: "10–45", title: "Cuerpo completo", exercises: [
-        { name: "Prensa de piernas", prescription: "2 × 10–12" },
-        { name: "Press de pecho en máquina", prescription: "2 × 10–12" },
-        { name: "Remo sentado", prescription: "2 × 10–12" },
-        { name: "Extensión de piernas", prescription: "2 × 10–12", note: "Omítela si molesta la rodilla." },
-        { name: "Jalón al pecho", prescription: "2 × 10–12" },
-        { name: "Abducción de cadera", prescription: "2 × 12–15" },
+          { name: "Prensa de piernas", prescription: "2 × 10–12", load: { initial: 20, step: 5 } },
+          { name: "Press de pecho en máquina", prescription: "2 × 10–12", load: { initial: 5, step: 5 } },
+          { name: "Remo sentado", prescription: "2 × 10–12", load: { initial: 10, step: 5 } },
+          { name: "Extensión de piernas", prescription: "2 × 10–12", note: "Omítela si molesta la rodilla.", load: { initial: 5, step: 5 } },
+          { name: "Jalón al pecho", prescription: "2 × 10–12", load: { initial: 10, step: 5 } },
+          { name: "Abducción de cadera", prescription: "2 × 12–15", load: { initial: 10, step: 5 } },
       ]},
       { time: "45–60", title: "Cardio + vuelta a la calma", exercises: [
         { name: "Bicicleta o caminadora", prescription: "10 min · moderado" },
@@ -77,11 +92,11 @@ const sessions: Record<SessionKey, {
     blocks: [
       { time: "0–6", title: "Preparar el cuerpo", exercises: [{ name: "Marcha, hombros y bisagra de cadera", prescription: "6 min · suave" }] },
       { time: "6–23", title: "Circuito · 2 vueltas", exercises: [
-        { name: "Peso muerto con kettlebell", prescription: "10 rep" },
+          { name: "Peso muerto con kettlebell", prescription: "10 rep", load: { initial: 12, step: 0, fixed: true } },
         { name: "Sentarse y levantarse de una silla", prescription: "10 rep" },
-        { name: "Remo con apoyo", prescription: "8 por lado" },
+          { name: "Remo con apoyo", prescription: "8 por lado", load: { initial: 12, step: 0, fixed: true } },
         { name: "Flexiones contra la pared", prescription: "10 rep" },
-        { name: "Caminata con peso a un costado", prescription: "20–30 s/lado" },
+          { name: "Caminata con peso a un costado", prescription: "20–30 s/lado", load: { initial: 12, step: 0, fixed: true } },
         { name: "Marcha en el lugar", prescription: "60 s" },
       ]},
     ],
@@ -105,7 +120,16 @@ const sessions: Record<SessionKey, {
   },
 };
 
-const initialStore: Store = { logs: [], checks: {}, startedAt: today() };
+const loadCatalog = Array.from(
+  new Map(
+    Object.values(sessions)
+      .flatMap(session => session.blocks.flatMap(block => block.exercises))
+      .filter(exercise => exercise.load)
+      .map(exercise => [exercise.name, exercise] as const)
+  ).values()
+);
+
+const initialStore: Store = { logs: [], checks: {}, loads: {}, loadHistory: [], startedAt: today() };
 const weeklySchedule: { day: string; short: string; key: SessionKey; detail: string }[] = [
   { day: "Lunes", short: "LUN", key: "lunes", detail: "Fuerza A" },
   { day: "Martes", short: "MAR", key: "caminar", detail: "Caminata" },
@@ -119,9 +143,34 @@ const weeklySchedule: { day: string; short: string; key: SessionKey; detail: str
 function loadStore(): Store {
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
-    if (saved?.logs && saved?.checks) return saved;
+    if (saved?.logs && saved?.checks) return {
+      ...initialStore,
+      ...saved,
+      loads: saved.loads || {},
+      loadHistory: saved.loadHistory || [],
+    };
   } catch { /* start clean */ }
   return initialStore;
+}
+
+function mergeStores(local: Store, remote: Partial<Store> | null): Store {
+  if (!remote) return local;
+  const logs = new Map<string, LogEntry>();
+  for (const log of [...(remote.logs || []), ...local.logs]) logs.set(log.date, log);
+  const history = new Map<string, { date: string; name: string; kg: number }>();
+  for (const event of [...(remote.loadHistory || []), ...local.loadHistory]) {
+    history.set(`${event.date}-${event.name}-${event.kg}`, event);
+  }
+  return {
+    ...initialStore,
+    ...remote,
+    ...local,
+    startedAt: [remote.startedAt, local.startedAt].filter(Boolean).sort()[0] || today(),
+    logs: [...logs.values()],
+    checks: { ...(remote.checks || {}), ...local.checks },
+    loads: { ...(remote.loads || {}), ...local.loads },
+    loadHistory: [...history.values()],
+  };
 }
 
 function currentDayIndex() {
@@ -207,9 +256,56 @@ function App() {
   const [timerRunning, setTimerRunning] = useState(false);
   const [form, setForm] = useState({ date: today(), weight: "", systolic: "", diastolic: "", activeMinutes: "", steps: "", water: "", energy: "3", note: "" });
   const [saveMessage, setSaveMessage] = useState("");
+  const [cloudUser, setCloudUser] = useState<CloudUser | null>(null);
+  const [cloudReady, setCloudReady] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<"local" | "syncing" | "synced" | "error">("local");
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authMessage, setAuthMessage] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { localStorage.setItem(STORE_KEY, JSON.stringify(store)); }, [store]);
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data }) => setCloudUser(data.session?.user || null));
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCloudUser(session?.user || null);
+      if (!session?.user) {
+        setCloudReady(false);
+        setSyncStatus("local");
+      }
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
+  useEffect(() => {
+    if (!cloudUser) return;
+    let cancelled = false;
+    setCloudReady(false);
+    setSyncStatus("syncing");
+    readCloudStore()
+      .then(remote => {
+        if (cancelled) return;
+        setStore(current => mergeStores(current, remote as Partial<Store> | null));
+        setCloudReady(true);
+        setSyncStatus("synced");
+      })
+      .catch(() => {
+        if (!cancelled) setSyncStatus("error");
+      });
+    return () => { cancelled = true; };
+  }, [cloudUser?.id]);
+  useEffect(() => {
+    if (!cloudUser || !cloudReady) return;
+    setSyncStatus("syncing");
+    const timeout = window.setTimeout(() => {
+      writeCloudStore(store)
+        .then(() => setSyncStatus("synced"))
+        .catch(() => setSyncStatus("error"));
+    }, 700);
+    return () => window.clearTimeout(timeout);
+  }, [store, cloudUser?.id, cloudReady]);
   useEffect(() => {
     if (!timerRunning) return;
     const id = window.setInterval(() => setTimer(value => {
@@ -309,6 +405,95 @@ function App() {
     setStore(current => ({ ...current, checks: { ...current.checks, [id]: !current.checks[id] } }));
   }
 
+  function adjustLoad(exercise: Exercise, direction: -1 | 1) {
+    if (!exercise.load || exercise.load.fixed) return;
+    setStore(current => {
+      const existing = current.loads[exercise.name];
+      const currentKg = existing?.kg ?? exercise.load!.initial;
+      const nextKg = Math.max(0, currentKg + direction * exercise.load!.step);
+      const progress: LoadProgress = {
+        kg: nextKg,
+        initialKg: existing?.initialKg ?? currentKg,
+        comfortableDates: [],
+      };
+      return {
+        ...current,
+        loads: { ...current.loads, [exercise.name]: progress },
+        loadHistory: [
+          ...current.loadHistory,
+          ...(!existing ? [{ date: today(), name: exercise.name, kg: currentKg }] : []),
+          { date: today(), name: exercise.name, kg: nextKg },
+        ],
+      };
+    });
+  }
+
+  function markLoadComfortable(exercise: Exercise) {
+    if (!exercise.load || exercise.load.fixed) return;
+    const previous = store.loads[exercise.name];
+    const currentKg = previous?.kg ?? exercise.load.initial;
+    if (previous?.comfortableDates.includes(today())) {
+      setSaveMessage("Esta carga ya fue validada hoy.");
+      window.setTimeout(() => setSaveMessage(""), 2500);
+      return;
+    }
+    const dates = [...(previous?.comfortableDates || []), today()];
+    const unlock = dates.length >= 2;
+    const nextKg = unlock ? currentKg + exercise.load.step : currentKg;
+    setStore(current => ({
+      ...current,
+      loads: {
+        ...current.loads,
+        [exercise.name]: {
+          kg: nextKg,
+          initialKg: previous?.initialKg ?? currentKg,
+          comfortableDates: unlock ? [] : dates,
+        },
+      },
+      loadHistory: unlock
+        ? [...current.loadHistory, { date: today(), name: exercise.name, kg: nextKg }]
+        : previous
+          ? current.loadHistory
+          : [...current.loadHistory, { date: today(), name: exercise.name, kg: currentKg }],
+    }));
+    setSaveMessage(unlock
+      ? `Nueva carga desbloqueada: ${exercise.name}, ${nextKg} kg.`
+      : `${exercise.name}: 1 de 2 sesiones controladas.`);
+    window.setTimeout(() => setSaveMessage(""), 3200);
+  }
+
+  async function submitAuth(mode: "signin" | "signup") {
+    if (!supabase || !authEmail || authPassword.length < 6) {
+      setAuthMessage("Ingresa un correo y una contraseña de al menos 6 caracteres.");
+      return;
+    }
+    setAuthBusy(true);
+    setAuthMessage("");
+    try {
+      const result = mode === "signin"
+        ? await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword })
+        : await supabase.auth.signUp({
+            email: authEmail,
+            password: authPassword,
+            options: { emailRedirectTo: "https://geoidegeoidal.github.io/ruta-fuerte/" },
+          });
+      if (result.error) {
+        setAuthMessage(result.error.message);
+        return;
+      }
+      if (mode === "signup" && !result.data.session) {
+        setAuthMessage("Revisa tu correo para confirmar la cuenta y luego inicia sesión.");
+      } else {
+        setAuthMessage("Cuenta conectada. Sincronizando tus datos…");
+        window.setTimeout(() => setAuthOpen(false), 900);
+      }
+    } catch {
+      setAuthMessage("No pudimos conectar con la nube. Revisa tu conexión e intenta otra vez.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
   function mergeLog(entry: LogEntry) {
     setStore(current => {
       const existing = current.logs.find(l => l.date === entry.date);
@@ -366,7 +551,7 @@ function App() {
       try {
         const parsed = JSON.parse(String(reader.result));
         if (!Array.isArray(parsed.logs) || typeof parsed.checks !== "object") throw new Error();
-        setStore(parsed);
+        setStore(mergeStores(initialStore, parsed));
         setSaveMessage("Respaldo importado correctamente.");
       } catch { setSaveMessage("Ese archivo no es un respaldo válido."); }
     };
@@ -395,13 +580,16 @@ function App() {
           <div className="mini-progress"><i style={{ width: `${Math.max(4, Math.min(100, Math.abs(weightChange) / 5.5 * 100))}%` }} /></div>
           <p>{Math.abs(weightChange).toFixed(1)} de 5,5 kg</p>
         </div>
-        <p className="local-note">Tus datos quedan en este dispositivo.</p>
+        <button className={`cloud-status ${syncStatus}`} onClick={() => setAuthOpen(true)}>
+          <i>{cloudUser ? "☁" : "↥"}</i>
+          <span><strong>{cloudUser ? (syncStatus === "syncing" ? "Sincronizando…" : syncStatus === "error" ? "Error de sincronización" : "Datos sincronizados") : "Conectar mis datos"}</strong><small>{cloudUser?.email || "Celular + computador"}</small></span>
+        </button>
       </aside>
 
       <main className="content">
         <header className="mobile-header">
           <button className="logo" onClick={() => setView("hoy")}><span>RF</span><strong>Ruta Fuerte</strong></button>
-          <div className="streak-pill">◉ {streak} días</div>
+          <div className="mobile-tools"><div className="streak-pill">◉ {streak} días</div><button className={`mobile-cloud ${syncStatus}`} onClick={() => setAuthOpen(true)} aria-label={cloudUser ? "Datos sincronizados" : "Conectar datos"}>{cloudUser ? "☁" : "↥"}</button></div>
         </header>
 
         {view === "hoy" && <div className="view">
@@ -451,12 +639,32 @@ function App() {
                   <div className="block-label"><span>{block.time}</span><strong>{block.title}</strong></div>
                   {block.exercises.map((exercise, ei) => {
                     const id = `${today()}-${sessionKey}-${bi}-${ei}`;
-                    return <button key={exercise.name} className={`exercise ${store.checks[id] ? "done" : ""}`} onClick={() => toggleExercise(id)} aria-pressed={Boolean(store.checks[id])}>
-                      <i>{store.checks[id] ? "✓" : ""}</i><span><strong>{exercise.name}</strong>{exercise.note && <small>{exercise.note}</small>}</span><b>{exercise.prescription}</b>
-                    </button>;
+                    const loadState = store.loads[exercise.name];
+                    const currentKg = loadState?.kg ?? exercise.load?.initial;
+                    const validatedToday = loadState?.comfortableDates.includes(today());
+                    return <div className="exercise-shell" key={exercise.name}>
+                      <button className={`exercise ${store.checks[id] ? "done" : ""}`} onClick={() => toggleExercise(id)} aria-pressed={Boolean(store.checks[id])}>
+                        <i>{store.checks[id] ? "✓" : ""}</i><span><strong>{exercise.name}</strong>{exercise.note && <small>{exercise.note}</small>}</span><b>{exercise.prescription}</b>
+                      </button>
+                      {exercise.load && <div className={`load-control ${exercise.load.fixed ? "fixed" : ""}`}>
+                        <span className="load-title"><small>CARGA</small><strong>{currentKg} <i>kg</i></strong></span>
+                        {!exercise.load.fixed && <>
+                          <div className="load-stepper">
+                            <button onClick={() => adjustLoad(exercise, -1)} aria-label={`Bajar ${exercise.name} en ${exercise.load!.step} kilos`}>−</button>
+                            <span>± {exercise.load.step} kg</span>
+                            <button onClick={() => adjustLoad(exercise, 1)} aria-label={`Subir ${exercise.name} en ${exercise.load!.step} kilos`}>+</button>
+                          </div>
+                          <button className={`comfort-button ${validatedToday ? "checked" : ""}`} disabled={validatedToday} onClick={() => markLoadComfortable(exercise)}>
+                            {validatedToday ? "✓ Validada hoy" : `Técnica controlada · ${loadState?.comfortableDates.length || 0}/2`}
+                          </button>
+                        </>}
+                        {exercise.load.fixed && <span className="fixed-note">Kettlebell disponible · progresa con repeticiones y vueltas</span>}
+                      </div>}
+                    </div>;
                   })}
                 </div>)}
               </div>
+              {(sessionKey === "lunes" || sessionKey === "miercoles") && <div className="load-safety"><strong>Cómo subir los kilos:</strong> pulsa “Técnica controlada” únicamente si terminaste todas las series, podías hacer 3–4 repeticiones más, respiraste sin aguantar el aire y no hubo dolor, mareo ni falta de aire anormal. Después de dos días distintos, la app suma 5 kg. Ajusta el punto de partida con el instructor de MindFit si la máquina se siente demasiado fácil o difícil.</div>}
               <div className="workout-actions">
                 <button className="primary" onClick={finishSession}>GUARDAR SESIÓN</button>
                 <div className="timer"><span>Descanso</span><strong>{String(Math.floor(timer / 60)).padStart(2, "0")}:{String(timer % 60).padStart(2, "0")}</strong><button onClick={() => { if (timer === 0) setTimer(90); setTimerRunning(v => !v); }}>{timerRunning ? "Ⅱ" : "▶"}</button><button onClick={() => { setTimerRunning(false); setTimer(90); }}>↺</button></div>
@@ -530,6 +738,22 @@ function App() {
             </div>
             <p className="chart-caption">Cada columna muestra hasta 60 minutos. Los días en cero no son fracasos: son información para ajustar la semana.</p>
           </section>
+          <section className="soft-card load-history-card">
+            <div className="card-heading"><div><p className="eyebrow">Sobrecarga progresiva</p><h2>Evolución de cargas</h2></div><span className="week-total">{store.loadHistory.length} hitos</span></div>
+            <div className="load-history-grid">
+              {loadCatalog.map(exercise => {
+                const progress = store.loads[exercise.name];
+                const current = progress?.kg ?? exercise.load!.initial;
+                const initial = progress?.initialKg ?? exercise.load!.initial;
+                return <article key={exercise.name}>
+                  <div><small>{exercise.load!.fixed ? "PESO FIJO" : "CARGA ACTUAL"}</small><h3>{exercise.name}</h3></div>
+                  <strong>{current}<i> kg</i></strong>
+                  <span className={current > initial ? "gain" : ""}>{current > initial ? `+${current - initial} kg` : exercise.load!.fixed ? "12 kg" : "Base"}</span>
+                </article>;
+              })}
+            </div>
+            <p className="chart-caption">Las cargas de máquina son referencias editables. El mecanismo de cada máquina cambia cuánto esfuerzo representan realmente esos kilos.</p>
+          </section>
           <section className="insights-grid">
             <article className="soft-card insight"><span>01</span><h3>Ritmo recomendado</h3><strong>0,25–0,75 kg</strong><p>por semana. Más rápido no siempre significa mejor ni más sostenible.</p></article>
             <article className="soft-card insight"><span>02</span><h3>Actividad acumulada</h3><strong>{totalMinutes} min</strong><p>{totalSessions} sesiones completas registradas.</p></article>
@@ -576,6 +800,32 @@ function App() {
               <a href="https://www.who.int/europe/publications/i/item/9789240014886" target="_blank" rel="noreferrer">OMS · Actividad física y sedentarismo ↗</a>
               <a href="https://mindfit.cl/san-martin/" target="_blank" rel="noreferrer">MindFit San Martín ↗</a>
             </div>
+          </section>
+        </div>}
+
+        {authOpen && <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setAuthOpen(false); }}>
+          <section className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+            <button className="modal-close" onClick={() => setAuthOpen(false)} aria-label="Cerrar">×</button>
+            <div className="cloud-orb">☁</div>
+            {cloudUser ? <>
+              <p className="eyebrow">Nube personal activa</p>
+              <h2 id="auth-title">Tus datos están contigo.</h2>
+              <p>Los cambios de este dispositivo se guardan en tu cuenta y aparecerán al iniciar sesión desde el celular o computador.</p>
+              <div className={`sync-detail ${syncStatus}`}><i>{syncStatus === "syncing" ? "↻" : syncStatus === "error" ? "!" : "✓"}</i><span><strong>{syncStatus === "syncing" ? "Sincronizando cambios" : syncStatus === "error" ? "No se pudo sincronizar" : "Todo sincronizado"}</strong><small>{cloudUser.email}</small></span></div>
+              <button className="secondary-action" onClick={async () => { await supabase?.auth.signOut(); setAuthOpen(false); }}>CERRAR SESIÓN</button>
+            </> : <>
+              <p className="eyebrow">Sincronización privada</p>
+              <h2 id="auth-title">Continúa en cualquier dispositivo.</h2>
+              <p>Crea una cuenta para guardar peso, presión, sesiones y cargas. Los registros que ya tienes en este navegador se subirán al conectarte.</p>
+              {!cloudConfigured ? <div className="auth-message error">La sincronización todavía no está configurada en esta versión.</div> : <div className="auth-form">
+                <label>Correo<input type="email" autoComplete="email" value={authEmail} onChange={event => setAuthEmail(event.target.value)} placeholder="tu@correo.cl" /></label>
+                <label>Contraseña<input type="password" autoComplete="current-password" value={authPassword} onChange={event => setAuthPassword(event.target.value)} placeholder="Mínimo 6 caracteres" /></label>
+                {authMessage && <div className="auth-message">{authMessage}</div>}
+                <button className="primary full" disabled={authBusy} onClick={() => submitAuth("signin")}>{authBusy ? "CONECTANDO…" : "INICIAR SESIÓN"}</button>
+                <button className="secondary-action" disabled={authBusy} onClick={() => submitAuth("signup")}>CREAR CUENTA</button>
+              </div>}
+              <small className="privacy-copy">La aplicación usa una tabla privada: tu cuenta solamente puede leer y modificar sus propios datos.</small>
+            </>}
           </section>
         </div>}
 
