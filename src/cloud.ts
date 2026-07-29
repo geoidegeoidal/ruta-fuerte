@@ -32,6 +32,9 @@ export async function readCloudStore() {
 
 export async function writeCloudStore(data: unknown) {
   if (!supabase) return;
+  if (new TextEncoder().encode(JSON.stringify(data)).byteLength > 1_000_000) {
+    throw new Error("Cloud payload exceeds the safe size limit");
+  }
   const { data: sessionData } = await supabase.auth.getSession();
   const user = sessionData.session?.user;
   if (!user) return;

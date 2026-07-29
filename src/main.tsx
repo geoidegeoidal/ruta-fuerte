@@ -41,6 +41,9 @@ type Exercise = {
 };
 
 const STORE_KEY = "ruta-fuerte-data-v2";
+const STORE_OWNER_KEY = "ruta-fuerte-owner-v1";
+const MAX_BACKUP_BYTES = 1_000_000;
+const MAX_NOTE_LENGTH = 500;
 const today = () => new Date().toLocaleDateString("en-CA");
 const dateLabel = (date: string, full = false) =>
   new Intl.DateTimeFormat("es-CL", full
@@ -140,35 +143,110 @@ const weeklySchedule: { day: string; short: string; key: SessionKey; detail: str
   { day: "Domingo", short: "DOM", key: "recuperar", detail: "Descanso" },
 ];
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const safeText = (value: unknown, maxLength: number) =>
+  typeof value === "string" ? value.slice(0, maxLength) : undefined;
+const safeNumber = (value: unknown, min: number, max: number) =>
+  typeof value === "number" && Number.isFinite(value) && value >= min && value <= max
+    ? value
+    : undefined;
+const isDate = (value: unknown): value is string => {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return year >= 2000 && year <= 2100 &&
+    parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
+};
+const isSession = (value: unknown): value is SessionKey =>
+  typeof value === "string" && ["lunes", "miercoles", "viernes", "caminar", "recuperar"].includes(value);
+
+function normalizeStore(value: unknown): Store {
+  if (!isRecord(value)) return { ...initialStore };
+  const logs = Array.isArray(value.logs)
+    ? value.logs.slice(-3660).flatMap((candidate): LogEntry[] => {
+        if (!isRecord(candidate) || !isDate(candidate.date)) return [];
+        return [{
+          id: safeText(candidate.id, 100) || crypto.randomUUID(),
+          date: candidate.date,
+          weight: safeNumber(candidate.weight, 30, 400),
+          systolic: safeNumber(candidate.systolic, 60, 260),
+          diastolic: safeNumber(candidate.diastolic, 30, 160),
+          activeMinutes: safeNumber(candidate.activeMinutes, 0, 1440) ?? 0,
+          steps: safeNumber(candidate.steps, 0, 100000),
+          water: safeNumber(candidate.water, 0, 50),
+          energy: safeNumber(candidate.energy, 1, 5),
+          session: isSession(candidate.session) ? candidate.session : undefined,
+          sessionDone: typeof candidate.sessionDone === "boolean" ? candidate.sessionDone : undefined,
+          note: safeText(candidate.note, MAX_NOTE_LENGTH),
+        }];
+      })
+    : [];
+  const checks: Record<string, boolean> = {};
+  if (isRecord(value.checks)) {
+    for (const [key, checked] of Object.entries(value.checks).slice(0, 10000)) {
+      if (key.length <= 180 && typeof checked === "boolean") checks[key] = checked;
+    }
+  }
+  const allowedLoads = new Map(loadCatalog.map(exercise => [exercise.name, exercise]));
+  const loads: Record<string, LoadProgress> = {};
+  if (isRecord(value.loads)) {
+    for (const [name, candidate] of Object.entries(value.loads).slice(0, allowedLoads.size)) {
+      const exercise = allowedLoads.get(name);
+      if (!exercise?.load || !isRecord(candidate)) continue;
+      const kg = safeNumber(candidate.kg, 0, 500);
+      const initialKg = safeNumber(candidate.initialKg, 0, 500);
+      if (kg === undefined || initialKg === undefined) continue;
+      loads[name] = {
+        kg,
+        initialKg,
+        comfortableDates: Array.isArray(candidate.comfortableDates)
+          ? candidate.comfortableDates.filter(isDate).slice(-2)
+          : [],
+      };
+    }
+  }
+  const loadHistory = Array.isArray(value.loadHistory)
+    ? value.loadHistory.slice(-5000).flatMap(candidate => {
+        if (!isRecord(candidate) || !isDate(candidate.date) ||
+            typeof candidate.name !== "string" || !allowedLoads.has(candidate.name)) return [];
+        const kg = safeNumber(candidate.kg, 0, 500);
+        return kg === undefined ? [] : [{ date: candidate.date, name: candidate.name, kg }];
+      })
+    : [];
+  return {
+    logs,
+    checks,
+    loads,
+    loadHistory,
+    startedAt: isDate(value.startedAt) ? value.startedAt : today(),
+  };
+}
+
 function loadStore(): Store {
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
-    if (saved?.logs && saved?.checks) return {
-      ...initialStore,
-      ...saved,
-      loads: saved.loads || {},
-      loadHistory: saved.loadHistory || [],
-    };
+    return normalizeStore(saved);
   } catch { /* start clean */ }
-  return initialStore;
+  return { ...initialStore };
 }
 
 function mergeStores(local: Store, remote: Partial<Store> | null): Store {
-  if (!remote) return local;
+  const safeLocal = normalizeStore(local);
+  if (!remote) return safeLocal;
+  const safeRemote = normalizeStore(remote);
   const logs = new Map<string, LogEntry>();
-  for (const log of [...(remote.logs || []), ...local.logs]) logs.set(log.date, log);
+  for (const log of [...safeRemote.logs, ...safeLocal.logs]) logs.set(log.date, log);
   const history = new Map<string, { date: string; name: string; kg: number }>();
-  for (const event of [...(remote.loadHistory || []), ...local.loadHistory]) {
+  for (const event of [...safeRemote.loadHistory, ...safeLocal.loadHistory]) {
     history.set(`${event.date}-${event.name}-${event.kg}`, event);
   }
   return {
     ...initialStore,
-    ...remote,
-    ...local,
-    startedAt: [remote.startedAt, local.startedAt].filter(Boolean).sort()[0] || today(),
+    startedAt: [safeRemote.startedAt, safeLocal.startedAt].filter(Boolean).sort()[0] || today(),
     logs: [...logs.values()],
-    checks: { ...(remote.checks || {}), ...local.checks },
-    loads: { ...(remote.loads || {}), ...local.loads },
+    checks: { ...safeRemote.checks, ...safeLocal.checks },
+    loads: { ...safeRemote.loads, ...safeLocal.loads },
     loadHistory: [...history.values()],
   };
 }
@@ -257,6 +335,7 @@ function App() {
   const [form, setForm] = useState({ date: today(), weight: "", systolic: "", diastolic: "", activeMinutes: "", steps: "", water: "", energy: "3", note: "" });
   const [saveMessage, setSaveMessage] = useState("");
   const [cloudUser, setCloudUser] = useState<CloudUser | null>(null);
+  const [authChecked, setAuthChecked] = useState(!supabase);
   const [cloudReady, setCloudReady] = useState(false);
   const [syncStatus, setSyncStatus] = useState<"local" | "syncing" | "synced" | "error">("local");
   const [authOpen, setAuthOpen] = useState(false);
@@ -266,12 +345,35 @@ function App() {
   const [authMessage, setAuthMessage] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { localStorage.setItem(STORE_KEY, JSON.stringify(store)); }, [store]);
+  useEffect(() => {
+    if (!authChecked) return;
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    if (cloudUser) localStorage.setItem(STORE_OWNER_KEY, cloudUser.id);
+  }, [store, cloudUser?.id, authChecked]);
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth.getSession().then(({ data }) => setCloudUser(data.session?.user || null));
+    const applySession = (user: CloudUser | null) => {
+      const storedOwner = localStorage.getItem(STORE_OWNER_KEY);
+      if (!user && storedOwner) {
+        localStorage.removeItem(STORE_KEY);
+        localStorage.removeItem(STORE_OWNER_KEY);
+        setStore({ ...initialStore });
+      } else if (user && storedOwner && storedOwner !== user.id) {
+        localStorage.removeItem(STORE_KEY);
+        setStore({ ...initialStore });
+      }
+      setCloudUser(user);
+      setAuthChecked(true);
+      if (!user) {
+        setCloudReady(false);
+        setSyncStatus("local");
+      }
+    };
+    supabase.auth.getSession()
+      .then(({ data }) => applySession(data.session?.user || null))
+      .catch(() => applySession(null));
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setCloudUser(session?.user || null);
+      applySession(session?.user || null);
       if (!session?.user) {
         setCloudReady(false);
         setSyncStatus("local");
@@ -463,22 +565,39 @@ function App() {
   }
 
   async function submitAuth(mode: "signin" | "signup") {
-    if (!supabase || !authEmail || authPassword.length < 6) {
-      setAuthMessage("Ingresa un correo y una contraseña de al menos 6 caracteres.");
+    const email = authEmail.trim().toLowerCase();
+    if (!supabase || !email || !authPassword) {
+      setAuthMessage("Ingresa tu correo y contraseña.");
+      return;
+    }
+    if (mode === "signup" && authPassword.length < 12) {
+      setAuthMessage("Para crear la cuenta usa al menos 12 caracteres.");
+      return;
+    }
+    if (mode === "signup" &&
+        (!/[a-z]/.test(authPassword) || !/[A-Z]/.test(authPassword) ||
+         !/\d/.test(authPassword) || !/[^A-Za-z0-9]/.test(authPassword))) {
+      setAuthMessage("Incluye minúscula, mayúscula, número y símbolo.");
       return;
     }
     setAuthBusy(true);
     setAuthMessage("");
     try {
       const result = mode === "signin"
-        ? await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword })
+        ? await supabase.auth.signInWithPassword({ email, password: authPassword })
         : await supabase.auth.signUp({
-            email: authEmail,
+            email,
             password: authPassword,
             options: { emailRedirectTo: "https://geoidegeoidal.github.io/ruta-fuerte/" },
           });
       if (result.error) {
-        setAuthMessage(result.error.message);
+        setAuthMessage(
+          result.error.status === 429
+            ? "Demasiados intentos. Espera unos minutos antes de volver a probar."
+            : mode === "signin"
+              ? "No pudimos iniciar sesión. Revisa tus datos o confirma tu correo."
+              : "No pudimos crear la cuenta. Prueba otro correo o una contraseña más fuerte."
+        );
         return;
       }
       if (mode === "signup" && !result.data.session) {
@@ -491,6 +610,23 @@ function App() {
       setAuthMessage("No pudimos conectar con la nube. Revisa tu conexión e intenta otra vez.");
     } finally {
       setAuthBusy(false);
+    }
+  }
+
+  async function signOutSecurely() {
+    try {
+      const { error } = await supabase!.auth.signOut();
+      if (error) {
+        setAuthMessage("No se pudo cerrar la sesión. Revisa tu conexión e intenta nuevamente.");
+        return;
+      }
+      localStorage.removeItem(STORE_KEY);
+      localStorage.removeItem(STORE_OWNER_KEY);
+      setStore({ ...initialStore });
+      setAuthPassword("");
+      setAuthOpen(false);
+    } catch {
+      setAuthMessage("No se pudo cerrar la sesión. Revisa tu conexión e intenta nuevamente.");
     }
   }
 
@@ -515,6 +651,24 @@ function App() {
 
   function saveDailyLog(event: React.FormEvent) {
     event.preventDefault();
+    const numericFields = [
+      ["Peso", form.weight, 30, 400],
+      ["Presión sistólica", form.systolic, 60, 260],
+      ["Presión diastólica", form.diastolic, 30, 160],
+      ["Minutos activos", form.activeMinutes, 0, 1440],
+      ["Pasos", form.steps, 0, 100000],
+      ["Vasos de agua", form.water, 0, 50],
+    ] as const;
+    const invalid = numericFields.find(([, value, min, max]) => {
+      if (!value) return false;
+      const parsed = Number(value.replace(",", "."));
+      return !Number.isFinite(parsed) || parsed < min || parsed > max;
+    });
+    if (!isDate(form.date) || invalid) {
+      setSaveMessage(invalid ? `${invalid[0]} está fuera del rango permitido.` : "La fecha no es válida.");
+      window.setTimeout(() => setSaveMessage(""), 3200);
+      return;
+    }
     const existing = store.logs.find(l => l.date === form.date);
     mergeLog({
       id: existing?.id || crypto.randomUUID(),
@@ -526,7 +680,7 @@ function App() {
       steps: form.steps ? Number(form.steps) : existing?.steps,
       water: form.water ? Number(form.water) : existing?.water,
       energy: Number(form.energy),
-      note: form.note || existing?.note,
+      note: form.note.slice(0, MAX_NOTE_LENGTH) || existing?.note,
       session: existing?.session,
       sessionDone: existing?.sessionDone,
     });
@@ -546,16 +700,27 @@ function App() {
   function importData(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_BACKUP_BYTES) {
+      setSaveMessage("El respaldo supera el límite seguro de 1 MB.");
+      event.target.value = "";
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const parsed = JSON.parse(String(reader.result));
-        if (!Array.isArray(parsed.logs) || typeof parsed.checks !== "object") throw new Error();
-        setStore(mergeStores(initialStore, parsed));
+        if (!isRecord(parsed) || !Array.isArray(parsed.logs) || !isRecord(parsed.checks)) throw new Error();
+        setStore(mergeStores(initialStore, normalizeStore(parsed)));
         setSaveMessage("Respaldo importado correctamente.");
       } catch { setSaveMessage("Ese archivo no es un respaldo válido."); }
+      event.target.value = "";
     };
+    reader.onerror = () => setSaveMessage("No se pudo leer el respaldo.");
     reader.readAsText(file);
+  }
+
+  if (!authChecked) {
+    return <main className="security-loading" aria-live="polite"><div className="cloud-orb">RF</div><strong>Protegiendo tus datos…</strong></main>;
   }
 
   const nav: { key: View; label: string; icon: string }[] = [
@@ -699,18 +864,18 @@ function App() {
               <h2>Nuevo registro</h2>
               <div className="form-grid">
                 <label>Fecha<input type="date" value={form.date} onChange={e => setForm({...form,date:e.target.value})}/></label>
-                <label>Peso<input inputMode="decimal" placeholder="kg" value={form.weight} onChange={e => setForm({...form,weight:e.target.value})}/></label>
-                <label>Presión sistólica<input inputMode="numeric" placeholder="130" value={form.systolic} onChange={e => setForm({...form,systolic:e.target.value})}/></label>
-                <label>Presión diastólica<input inputMode="numeric" placeholder="85" value={form.diastolic} onChange={e => setForm({...form,diastolic:e.target.value})}/></label>
-                <label>Minutos activos<input inputMode="numeric" placeholder="20" value={form.activeMinutes} onChange={e => setForm({...form,activeMinutes:e.target.value})}/></label>
-                <label>Pasos<input inputMode="numeric" placeholder="4500" value={form.steps} onChange={e => setForm({...form,steps:e.target.value})}/></label>
-                <label>Vasos de agua<input inputMode="numeric" placeholder="6" value={form.water} onChange={e => setForm({...form,water:e.target.value})}/></label>
+                <label>Peso<input inputMode="decimal" min="30" max="400" placeholder="kg" value={form.weight} onChange={e => setForm({...form,weight:e.target.value})}/></label>
+                <label>Presión sistólica<input inputMode="numeric" min="60" max="260" placeholder="130" value={form.systolic} onChange={e => setForm({...form,systolic:e.target.value})}/></label>
+                <label>Presión diastólica<input inputMode="numeric" min="30" max="160" placeholder="85" value={form.diastolic} onChange={e => setForm({...form,diastolic:e.target.value})}/></label>
+                <label>Minutos activos<input inputMode="numeric" min="0" max="1440" placeholder="20" value={form.activeMinutes} onChange={e => setForm({...form,activeMinutes:e.target.value})}/></label>
+                <label>Pasos<input inputMode="numeric" min="0" max="100000" placeholder="4500" value={form.steps} onChange={e => setForm({...form,steps:e.target.value})}/></label>
+                <label>Vasos de agua<input inputMode="numeric" min="0" max="50" placeholder="6" value={form.water} onChange={e => setForm({...form,water:e.target.value})}/></label>
                 <label>Energía<select value={form.energy} onChange={e => setForm({...form,energy:e.target.value})}><option value="1">1 · Muy baja</option><option value="2">2 · Baja</option><option value="3">3 · Normal</option><option value="4">4 · Buena</option><option value="5">5 · Excelente</option></select></label>
-                <label className="wide">Nota<textarea placeholder="Sueño, molestias, cómo se sintió el entrenamiento…" value={form.note} onChange={e => setForm({...form,note:e.target.value})}/></label>
+                <label className="wide">Nota<textarea maxLength={MAX_NOTE_LENGTH} placeholder="Sueño, molestias, cómo se sintió el entrenamiento…" value={form.note} onChange={e => setForm({...form,note:e.target.value})}/></label>
               </div>
               <button className="primary">GUARDAR EN HISTORIAL</button>
             </form>
-            <div className="data-tools soft-card"><h3>Respaldo</h3><p>Los datos viven en este navegador. Descarga una copia para conservarlos o moverlos a otro dispositivo.</p><button onClick={exportData}>↓ EXPORTAR DATOS</button><button onClick={() => importRef.current?.click()}>↑ IMPORTAR RESPALDO</button><input ref={importRef} type="file" accept="application/json" hidden onChange={importData}/></div>
+            <div className="data-tools soft-card"><h3>Respaldo</h3><p>Si conectaste tu cuenta, la nube guarda una copia privada. También puedes descargar un respaldo personal.</p><button onClick={exportData}>↓ EXPORTAR DATOS</button><button onClick={() => importRef.current?.click()}>↑ IMPORTAR RESPALDO</button><input ref={importRef} type="file" accept="application/json,.json" hidden onChange={importData}/></div>
           </section>
           <section className="log-list">
             {[...store.logs].sort((a,b) => b.date.localeCompare(a.date)).map(log => <article className="soft-card log-row" key={log.id}>
@@ -812,14 +977,15 @@ function App() {
               <h2 id="auth-title">Tus datos están contigo.</h2>
               <p>Los cambios de este dispositivo se guardan en tu cuenta y aparecerán al iniciar sesión desde el celular o computador.</p>
               <div className={`sync-detail ${syncStatus}`}><i>{syncStatus === "syncing" ? "↻" : syncStatus === "error" ? "!" : "✓"}</i><span><strong>{syncStatus === "syncing" ? "Sincronizando cambios" : syncStatus === "error" ? "No se pudo sincronizar" : "Todo sincronizado"}</strong><small>{cloudUser.email}</small></span></div>
-              <button className="secondary-action" onClick={async () => { await supabase?.auth.signOut(); setAuthOpen(false); }}>CERRAR SESIÓN</button>
+              {authMessage && <div className="auth-message">{authMessage}</div>}
+              <button className="secondary-action" onClick={signOutSecurely}>CERRAR SESIÓN Y BORRAR DATOS DE ESTE EQUIPO</button>
             </> : <>
               <p className="eyebrow">Sincronización privada</p>
               <h2 id="auth-title">Continúa en cualquier dispositivo.</h2>
               <p>Crea una cuenta para guardar peso, presión, sesiones y cargas. Los registros que ya tienes en este navegador se subirán al conectarte.</p>
               {!cloudConfigured ? <div className="auth-message error">La sincronización todavía no está configurada en esta versión.</div> : <div className="auth-form">
-                <label>Correo<input type="email" autoComplete="email" value={authEmail} onChange={event => setAuthEmail(event.target.value)} placeholder="tu@correo.cl" /></label>
-                <label>Contraseña<input type="password" autoComplete="current-password" value={authPassword} onChange={event => setAuthPassword(event.target.value)} placeholder="Mínimo 6 caracteres" /></label>
+                <label>Correo<input type="email" inputMode="email" autoComplete="email" maxLength={254} spellCheck={false} value={authEmail} onChange={event => setAuthEmail(event.target.value)} placeholder="tu@correo.cl" /></label>
+                <label>Contraseña<input type="password" autoComplete="current-password" minLength={12} maxLength={128} spellCheck={false} value={authPassword} onChange={event => setAuthPassword(event.target.value)} placeholder="12+ · Aa1!" /></label>
                 {authMessage && <div className="auth-message">{authMessage}</div>}
                 <button className="primary full" disabled={authBusy} onClick={() => submitAuth("signin")}>{authBusy ? "CONECTANDO…" : "INICIAR SESIÓN"}</button>
                 <button className="secondary-action" disabled={authBusy} onClick={() => submitAuth("signup")}>CREAR CUENTA</button>
