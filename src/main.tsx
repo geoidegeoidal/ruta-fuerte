@@ -788,6 +788,10 @@ function App() {
   const guideModalRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [view]);
+
+  useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem(THEME_KEY, theme);
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#202733" : "#e3e8ef");
