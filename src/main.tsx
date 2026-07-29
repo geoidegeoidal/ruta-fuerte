@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 type View = "hoy" | "historial" | "evolucion" | "logros" | "plan";
-type SessionKey = "lunes" | "miercoles" | "viernes" | "caminar";
+type SessionKey = "lunes" | "miercoles" | "viernes" | "caminar" | "recuperar";
 type LogEntry = {
   id: string;
   date: string;
@@ -95,9 +95,26 @@ const sessions: Record<SessionKey, {
       { name: "Semanas 7–8", prescription: "30 min · 3 días", note: "Si cuesta hablar, baja el ritmo." },
     ]}],
   },
+  recuperar: {
+    label: "Recuperar", place: "En casa o al aire libre", title: "Movilidad suave", duration: 15,
+    blocks: [{ time: "15 MIN", title: "Mover sin exigir", exercises: [
+      { name: "Caminata muy suave", prescription: "8 min" },
+      { name: "Movilidad de hombros y cadera", prescription: "4 min", note: "Sin rebotes ni dolor." },
+      { name: "Respiración tranquila", prescription: "3 min", note: "Inhala y exhala sin aguantar el aire." },
+    ]}],
+  },
 };
 
 const initialStore: Store = { logs: [], checks: {}, startedAt: today() };
+const weeklySchedule: { day: string; short: string; key: SessionKey; detail: string }[] = [
+  { day: "Lunes", short: "LUN", key: "lunes", detail: "Fuerza A" },
+  { day: "Martes", short: "MAR", key: "caminar", detail: "Caminata" },
+  { day: "Miércoles", short: "MIÉ", key: "miercoles", detail: "Fuerza B" },
+  { day: "Jueves", short: "JUE", key: "recuperar", detail: "Recuperar" },
+  { day: "Viernes", short: "VIE", key: "viernes", detail: "Kettlebell" },
+  { day: "Sábado", short: "SÁB", key: "caminar", detail: "Caminata" },
+  { day: "Domingo", short: "DOM", key: "recuperar", detail: "Descanso" },
+];
 
 function loadStore(): Store {
   try {
@@ -107,12 +124,9 @@ function loadStore(): Store {
   return initialStore;
 }
 
-function sessionForToday(): SessionKey {
+function currentDayIndex() {
   const day = new Date().getDay();
-  if (day === 1) return "lunes";
-  if (day === 3) return "miercoles";
-  if (day === 5) return "viernes";
-  return "caminar";
+  return day === 0 ? 6 : day - 1;
 }
 
 function getWeekStart(date = new Date()) {
@@ -188,7 +202,7 @@ function WeightChart({ logs }: { logs: LogEntry[] }) {
 function App() {
   const [store, setStore] = useState<Store>(loadStore);
   const [view, setView] = useState<View>("hoy");
-  const [sessionKey, setSessionKey] = useState<SessionKey>(sessionForToday);
+  const [selectedDay, setSelectedDay] = useState(currentDayIndex);
   const [timer, setTimer] = useState(90);
   const [timerRunning, setTimerRunning] = useState(false);
   const [form, setForm] = useState({ date: today(), weight: "", systolic: "", diastolic: "", activeMinutes: "", steps: "", water: "", energy: "3", note: "" });
@@ -205,10 +219,6 @@ function App() {
     return () => window.clearInterval(id);
   }, [timerRunning]);
 
-  const session = sessions[sessionKey];
-  const allExercises = session.blocks.flatMap((block, bi) => block.exercises.map((exercise, ei) => ({ ...exercise, id: `${today()}-${sessionKey}-${bi}-${ei}` })));
-  const doneCount = allExercises.filter(e => store.checks[e.id]).length;
-  const donePercent = Math.round(doneCount / allExercises.length * 100);
   const sortedLogs = [...store.logs].sort((a, b) => a.date.localeCompare(b.date));
   const weightLogs = sortedLogs.filter(l => l.weight);
   const firstWeight = weightLogs[0]?.weight;
@@ -222,6 +232,58 @@ function App() {
   const weekGym = weekLogs.filter(l => l.sessionDone && (l.session === "lunes" || l.session === "miercoles")).length;
   const weekWalks = weekLogs.filter(l => l.activeMinutes > 0 && (l.session === "caminar" || !l.session)).length;
   const weekMinutes = weekLogs.reduce((sum, l) => sum + l.activeMinutes, 0);
+  const qualifiedGym = store.logs.filter(l => l.sessionDone && (l.session === "lunes" || l.session === "miercoles") && l.activeMinutes >= 60).length;
+  const qualifiedKettlebell = store.logs.filter(l => l.sessionDone && l.session === "viernes" && l.activeMinutes >= 25).length;
+  const walks15 = store.logs.filter(l => l.session === "caminar" && l.activeMinutes >= 15).length;
+  const walks20 = store.logs.filter(l => l.session === "caminar" && l.activeMinutes >= 20).length;
+  const walks25 = store.logs.filter(l => l.session === "caminar" && l.activeMinutes >= 25).length;
+  let programLevel = 1;
+  if (qualifiedGym >= 2 && qualifiedKettlebell >= 1 && walks15 >= 2) programLevel = 2;
+  if (qualifiedGym >= 6 && qualifiedKettlebell >= 3 && walks20 >= 6) programLevel = 3;
+  if (qualifiedGym >= 10 && qualifiedKettlebell >= 5 && walks25 >= 8 && totalMinutes >= 750) programLevel = 4;
+  const walkTarget = [15, 20, 25, 30][programLevel - 1];
+  const walkTargetCount = programLevel === 1 ? 2 : 3;
+  const requirements = programLevel === 1
+    ? [{ label: "Gym · 60 min", value: qualifiedGym, target: 2 }, { label: "Kettlebell · 25 min", value: qualifiedKettlebell, target: 1 }, { label: "Caminatas · 15 min", value: walks15, target: 2 }]
+    : programLevel === 2
+      ? [{ label: "Gym acumulado", value: qualifiedGym, target: 6 }, { label: "Kettlebell acumulado", value: qualifiedKettlebell, target: 3 }, { label: "Caminatas · 20 min", value: walks20, target: 6 }]
+      : programLevel === 3
+        ? [{ label: "Gym acumulado", value: qualifiedGym, target: 10 }, { label: "Kettlebell acumulado", value: qualifiedKettlebell, target: 5 }, { label: "Caminatas · 25 min", value: walks25, target: 8 }, { label: "Minutos totales", value: totalMinutes, target: 750 }]
+        : [];
+  const unlockProgress = requirements.length
+    ? Math.round(requirements.reduce((sum, item) => sum + Math.min(1, item.value / item.target), 0) / requirements.length * 100)
+    : 100;
+  const activeSchedule = weeklySchedule.map((day, index) =>
+    index === 3 && programLevel >= 2
+      ? { ...day, key: "caminar" as SessionKey, detail: "Caminata +" }
+      : day
+  );
+  const sessionKey = activeSchedule[selectedDay].key;
+  const baseSession = sessions[sessionKey];
+  const session = {
+    ...baseSession,
+    duration: sessionKey === "caminar" ? walkTarget : baseSession.duration,
+    blocks: sessionKey === "caminar"
+      ? [{ time: `${walkTarget} MIN`, title: `Objetivo del Nivel ${programLevel}`, exercises: [
+          { name: "Caminata a ritmo conversable", prescription: `${walkTarget} min`, note: "Debes poder hablar en frases completas." },
+          { name: "Vuelta a la calma", prescription: "3 min suaves", note: "No te detengas de golpe." },
+        ]}]
+      : baseSession.blocks.map(block => ({
+          ...block,
+          title: sessionKey === "viernes" && block.title.startsWith("Circuito")
+            ? `Circuito · ${programLevel >= 3 ? 3 : 2} vueltas`
+            : block.title,
+          exercises: block.exercises.map(exercise => ({
+            ...exercise,
+            prescription: programLevel >= 3 && (sessionKey === "lunes" || sessionKey === "miercoles")
+              ? exercise.prescription.replace(/^2 ×/, "3 ×")
+              : exercise.prescription,
+          })),
+        })),
+  };
+  const allExercises = session.blocks.flatMap((block, bi) => block.exercises.map((exercise, ei) => ({ ...exercise, id: `${today()}-${sessionKey}-${bi}-${ei}` })));
+  const doneCount = allExercises.filter(e => store.checks[e.id]).length;
+  const donePercent = Math.round(doneCount / allExercises.length * 100);
   const lastSevenDays = Array.from({ length: 7 }, (_, index) => {
     const date = new Date();
     date.setDate(date.getDate() - (6 - index));
@@ -262,7 +324,7 @@ function App() {
       id: crypto.randomUUID(), date: today(), activeMinutes: session.duration,
       session: sessionKey, sessionDone: true,
     });
-    setSaveMessage("Entrenamiento guardado en tu historial.");
+    setSaveMessage(programLevel < 4 ? "Sesión guardada. Tu próximo nivel está más cerca." : "Sesión guardada. Nivel máximo consolidado.");
     window.setTimeout(() => setSaveMessage(""), 3000);
   }
 
@@ -357,12 +419,33 @@ function App() {
           <section className="today-grid">
             <article className="soft-card workout-card">
               <div className="card-heading">
-                <div><p className="eyebrow">Tu entrenamiento</p><h2>{session.label} · {session.title}</h2><span>{session.place} · {session.duration} min</span></div>
+                <div><p className="eyebrow">{selectedDay === currentDayIndex() ? "Tu entrenamiento de hoy" : `Plan para el ${activeSchedule[selectedDay].day.toLowerCase()}`}</p><h2>{activeSchedule[selectedDay].day} · {session.title}</h2><span>{session.place} · {session.duration} min</span></div>
                 <div className="completion-ring" style={{ "--progress": `${donePercent * 3.6}deg` } as React.CSSProperties}><strong>{donePercent}%</strong></div>
               </div>
-              <div className="session-switch" role="tablist" aria-label="Elegir sesión">
-                {(Object.keys(sessions) as SessionKey[]).map(key => <button role="tab" aria-selected={key === sessionKey} className={key === sessionKey ? "active" : ""} onClick={() => setSessionKey(key)} key={key}>{sessions[key].label}</button>)}
+              <div className="week-selector" role="tablist" aria-label="Elegir día de la semana">
+                {activeSchedule.map((day, index) => <button
+                  role="tab"
+                  aria-selected={selectedDay === index}
+                  className={`${selectedDay === index ? "active" : ""} ${currentDayIndex() === index ? "is-today" : ""}`}
+                  onClick={() => setSelectedDay(index)}
+                  key={day.day}
+                >
+                  <span>{day.short}</span><strong>{day.detail}</strong>{currentDayIndex() === index && <small>HOY</small>}
+                </button>)}
               </div>
+              <section className="unlock-panel" aria-label={`Progresión: nivel ${programLevel}`}>
+                <div className="level-orb"><small>NIVEL</small><strong>{programLevel}</strong><span>DE 4</span></div>
+                <div className="unlock-copy">
+                  <div><p className="eyebrow">{programLevel === 4 ? "Todo desbloqueado" : `Camino al Nivel ${programLevel + 1}`}</p><h3>{["Base segura", "Más resistencia", "Más volumen", "Hábito consolidado"][programLevel - 1]}</h3></div>
+                  {programLevel < 4 ? <>
+                    <div className="unlock-progress"><i style={{width:`${unlockProgress}%`}}/><span>{unlockProgress}%</span></div>
+                    <div className="unlock-requirements">
+                      {requirements.map(item => <span className={item.value >= item.target ? "complete" : ""} key={item.label}><i>{item.value >= item.target ? "✓" : "○"}</i>{item.label}<b>{Math.min(item.value,item.target)}/{item.target}</b></span>)}
+                    </div>
+                    <p className="unlock-reward">Al desbloquear: {programLevel === 1 ? "caminatas de 20 min y tercer día activo opcional." : programLevel === 2 ? "3 series, 3 vueltas de kettlebell y caminatas de 25 min." : "caminatas de 30 min y meta consolidada de 150 min semanales."}</p>
+                  </> : <p className="unlock-reward">Ya liberaste todo el plan. Mantén este nivel y prioriza la regularidad.</p>}
+                </div>
+              </section>
               <div className="exercise-list">
                 {session.blocks.map((block, bi) => <div className="exercise-block" key={block.title}>
                   <div className="block-label"><span>{block.time}</span><strong>{block.title}</strong></div>
@@ -384,7 +467,7 @@ function App() {
               <article className="soft-card week-card">
                 <div className="card-heading compact"><div><p className="eyebrow">Esta semana</p><h3>Tu brecha</h3></div><strong>{Math.min(100, Math.round(weekMinutes / 150 * 100))}%</strong></div>
                 <GapRow label="Gimnasio" value={weekGym} target={2} unit="sesiones" />
-                <GapRow label="Caminatas" value={weekWalks} target={3} unit="salidas" />
+                <GapRow label="Caminatas" value={weekWalks} target={walkTargetCount} unit="salidas" />
                 <GapRow label="Actividad" value={weekMinutes} target={150} unit="min" />
                 <p className="gap-message">{weekMinutes >= 150 ? "Meta semanal conseguida. Excelente." : `Faltan ${Math.max(0, 150 - weekMinutes)} minutos. Cada caminata suma.`}</p>
               </article>
@@ -475,10 +558,10 @@ function App() {
           </section>
           <section className="plan-grid">
             <article className="soft-card plan-card"><p className="eyebrow">Progresión</p><h2>Subir sin apurarse</h2><div className="timeline">
-              <div><span>01–02</span><strong>Adaptar</strong><p>2 gimnasios, 1 kettlebell y caminatas de 15 minutos.</p></div>
-              <div><span>03–04</span><strong>Construir</strong><p>Agrega la segunda caminata y llega a 20 minutos.</p></div>
-              <div><span>05–06</span><strong>Consolidar</strong><p>Si recuperas bien, usa 3 series y camina 25 minutos.</p></div>
-              <div><span>07–08</span><strong>Sostener</strong><p>Busca 150 minutos semanales y caminatas de 30 minutos.</p></div>
+              <div className="unlocked"><span>✓</span><strong>Nivel 1 · Adaptar</strong><p>2 gimnasios, 1 kettlebell y caminatas de 15 minutos.</p></div>
+              <div className={programLevel >= 2 ? "unlocked" : "locked"}><span>{programLevel >= 2 ? "✓" : "🔒"}</span><strong>Nivel 2 · Construir</strong><p>Caminatas de 20 minutos y tercer día activo opcional.</p></div>
+              <div className={programLevel >= 3 ? "unlocked" : "locked"}><span>{programLevel >= 3 ? "✓" : "🔒"}</span><strong>Nivel 3 · Consolidar</strong><p>3 series, 3 vueltas de kettlebell y caminatas de 25 minutos.</p></div>
+              <div className={programLevel >= 4 ? "unlocked" : "locked"}><span>{programLevel >= 4 ? "✓" : "🔒"}</span><strong>Nivel 4 · Sostener</strong><p>Caminatas de 30 minutos y al menos 150 minutos semanales.</p></div>
             </div></article>
             <article className="soft-card plan-card"><p className="eyebrow">Alimentación</p><h2>Lo que mueve la balanza</h2><ul className="guideline-list"><li><span>½</span><div><strong>Verduras</strong><p>La mitad del plato en almuerzo y cena.</p></div></li><li><span>¼</span><div><strong>Proteína</strong><p>Pollo, pescado, huevos, legumbres o lácteos.</p></div></li><li><span>¼</span><div><strong>Carbohidrato</strong><p>Arroz, papa, pasta o legumbres en porción medida.</p></div></li><li><span>○</span><div><strong>Bebidas</strong><p>Agua como base; elimina bebidas azucaradas y limita alcohol.</p></div></li></ul></article>
             <article className="soft-card plan-card warning-card"><p className="eyebrow">Seguridad</p><h2>La presión manda</h2><div className="pressure-number">&gt;180 <small>o</small> &gt;120</div><p>No entrenes. Repite la lectura después de unos minutos y contacta a un profesional. Con dolor de pecho, falta de aire, debilidad, alteración visual o dificultad para hablar, busca atención urgente.</p><ul><li>Respira durante cada repetición.</li><li>No entrenes al fallo: deja 3–4 repeticiones en reserva.</li><li>Detente ante mareo, desmayo o falta de aire anormal.</li><li>Por ahora evita swings, snatches y press sobre la cabeza.</li></ul></article>
