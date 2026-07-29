@@ -43,6 +43,237 @@ type Exercise = {
   note?: string;
   load?: { initial: number; step: number; fixed?: boolean };
 };
+type ExerciseGuide = {
+  image: string;
+  alt: string;
+  steps: [string, string, string];
+  focus: string;
+  breathing: string;
+};
+type GuideSelection = {
+  name: string;
+  prescription: string;
+  guide: ExerciseGuide;
+};
+
+const exerciseImage = (file: string) => `${import.meta.env.BASE_URL}exercises/${file}`;
+const walkingGuide: ExerciseGuide = {
+  image: exerciseImage("treadmill-walk.jpg"),
+  alt: "Secuencia de caminata erguida y controlada en caminadora",
+  steps: [
+    "Empieza lento y deja que el ritmo suba durante varios minutos.",
+    "Camina erguido, con mirada al frente y brazos relajados.",
+    "Baja el ritmo gradualmente antes de detenerte.",
+  ],
+  focus: "Usa el ritmo conversable: debes poder hablar en frases breves sin jadear.",
+  breathing: "Respira de forma continua; no aguantes el aire.",
+};
+const cardioChoiceGuide: ExerciseGuide = {
+  ...walkingGuide,
+  image: exerciseImage("cardio-options.jpg"),
+  alt: "Dos opciones de cardio suave: bicicleta reclinada y caminadora",
+  focus: "En caminadora, camina erguido. En bicicleta reclinada, ajusta el asiento para no bloquear las rodillas.",
+};
+const calmGuide: ExerciseGuide = {
+  image: exerciseImage("calm-breathing.jpg"),
+  alt: "Hombre practicando respiración tranquila y consciente",
+  steps: [
+    "Ponte de pie o siéntate con espalda larga y hombros sueltos.",
+    "Inhala suave por la nariz, sin elevar los hombros.",
+    "Exhala lento y deja que el abdomen vuelva sin forzar.",
+  ],
+  focus: "La respiración debe sentirse cómoda. Si aparece mareo, vuelve a tu respiración normal.",
+  breathing: "Nunca hagas pausas largas ni empujes el aire con fuerza.",
+};
+const exerciseGuides: Record<string, ExerciseGuide> = {
+  "Bicicleta reclinada o caminadora": cardioChoiceGuide,
+  "Bicicleta o caminadora": cardioChoiceGuide,
+  "Caminar muy suave": walkingGuide,
+  "Caminata muy suave": walkingGuide,
+  "Caminata a ritmo conversable": walkingGuide,
+  "Vuelta a la calma": walkingGuide,
+  "Semanas 1–2": walkingGuide,
+  "Semanas 3–4": walkingGuide,
+  "Semanas 5–6": walkingGuide,
+  "Semanas 7–8": walkingGuide,
+  "Prensa de piernas": {
+    image: exerciseImage("leg-press.jpg"),
+    alt: "Secuencia de prensa de piernas en máquina",
+    steps: [
+      "Apoya espalda y cadera; coloca los pies al ancho de las caderas.",
+      "Empuja siguiendo la línea de los pies, sin juntar las rodillas.",
+      "Regresa lento hasta un ángulo cómodo, sin despegar la cadera.",
+    ],
+    focus: "No bloquees las rodillas al extender y evita bajar tanto que la pelvis se redondee.",
+    breathing: "Exhala al empujar; inhala al regresar.",
+  },
+  "Press de pecho en máquina": {
+    image: exerciseImage("chest-press.jpg"),
+    alt: "Secuencia de press de pecho sentado en máquina",
+    steps: [
+      "Ajusta el asiento para que las manillas queden a la altura media del pecho.",
+      "Mantén espalda y cabeza apoyadas; empuja al frente sin encoger hombros.",
+      "Vuelve con control hasta que los codos queden apenas detrás del torso.",
+    ],
+    focus: "Muñecas rectas y hombros lejos de las orejas.",
+    breathing: "Exhala al empujar; inhala al volver.",
+  },
+  "Remo sentado": {
+    image: exerciseImage("seated-row.jpg"),
+    alt: "Secuencia de remo sentado en polea",
+    steps: [
+      "Siéntate alto, con pies firmes y brazos extendidos sin redondear la espalda.",
+      "Lleva los codos hacia atrás, cerca del cuerpo.",
+      "Pausa y extiende los brazos lentamente sin inclinar el tronco.",
+    ],
+    focus: "El pecho se mantiene estable; no conviertas el movimiento en un balanceo.",
+    breathing: "Exhala al tirar; inhala al extender.",
+  },
+  "Curl femoral": {
+    image: exerciseImage("leg-curl.jpg"),
+    alt: "Secuencia de curl femoral acostado en máquina",
+    steps: [
+      "Alinea la rodilla con el eje y deja el rodillo detrás de las pantorrillas.",
+      "Dobla las rodillas acercando los talones sin levantar la cadera.",
+      "Baja el peso lentamente sin dejar que golpee la torre.",
+    ],
+    focus: "La ilustración muestra la versión acostada; si la máquina es sentada, pide al instructor que ajuste eje y rodillos.",
+    breathing: "Exhala al doblar; inhala al extender.",
+  },
+  "Jalón al pecho": {
+    image: exerciseImage("lat-pulldown.jpg"),
+    alt: "Secuencia de jalón de polea al pecho",
+    steps: [
+      "Sujeta la barra un poco más ancho que los hombros y fija los muslos.",
+      "Baja la barra hacia la parte alta del pecho llevando codos hacia abajo.",
+      "Sube con control hasta extender los brazos sin perder postura.",
+    ],
+    focus: "Lleva la barra por delante; no la pases detrás de la nuca ni te balancees.",
+    breathing: "Exhala al bajar la barra; inhala al subir.",
+  },
+  "Elevación de talones": {
+    image: exerciseImage("calf-raise.jpg"),
+    alt: "Secuencia de elevación de talones con apoyo",
+    steps: [
+      "Apoya la parte delantera del pie y mantén las rodillas suaves.",
+      "Eleva los talones sin inclinar el cuerpo hacia delante.",
+      "Desciende despacio hasta un estiramiento cómodo.",
+    ],
+    focus: "Usa apoyo estable y reparte el peso entre ambos pies.",
+    breathing: "Exhala al subir; inhala al bajar.",
+  },
+  "Extensión de piernas": {
+    image: exerciseImage("leg-extension.jpg"),
+    alt: "Secuencia de extensión de piernas sentada en máquina",
+    steps: [
+      "Alinea la rodilla con el eje y el rodillo sobre la parte baja de la tibia.",
+      "Extiende las piernas sin patear ni bloquear las rodillas.",
+      "Baja lento hasta la posición inicial.",
+    ],
+    focus: "Usa un rango sin dolor; si molesta la rodilla, omite el ejercicio.",
+    breathing: "Exhala al extender; inhala al bajar.",
+  },
+  "Abducción de cadera": {
+    image: exerciseImage("hip-abduction.jpg"),
+    alt: "Secuencia de abducción de cadera sentada en máquina",
+    steps: [
+      "Apoya espalda y pies, con las almohadillas por fuera de las piernas.",
+      "Abre las rodillas sin inclinar el tronco.",
+      "Regresa lento, evitando que las placas choquen.",
+    ],
+    focus: "Abre solo hasta donde puedas mantener la pelvis quieta.",
+    breathing: "Exhala al abrir; inhala al cerrar.",
+  },
+  "Marcha, hombros y bisagra de cadera": {
+    image: exerciseImage("march-warmup.jpg"),
+    alt: "Marcha suave con movilidad de hombros para calentar",
+    steps: [
+      "Marcha suave alternando los pies y manteniendo una postura alta.",
+      "Añade círculos pequeños de hombros, lejos de las orejas.",
+      "Practica la bisagra llevando la cadera atrás con espalda neutra.",
+    ],
+    focus: "Todo debe ser suave y sin rebotes; la bisagra nace en la cadera, no en la cintura.",
+    breathing: "Respira libremente durante toda la preparación.",
+  },
+  "Peso muerto con kettlebell": {
+    image: exerciseImage("kettlebell-deadlift.jpg"),
+    alt: "Secuencia de peso muerto con una kettlebell",
+    steps: [
+      "Pon la kettlebell entre los pies y lleva la cadera hacia atrás.",
+      "Toma el asa con ambas manos y mantén la espalda neutra.",
+      "Empuja el suelo y termina erguido, sin inclinarte hacia atrás.",
+    ],
+    focus: "La pesa sube cerca del cuerpo. Esto es peso muerto, no swing.",
+    breathing: "Exhala al levantarte; inhala al bajar.",
+  },
+  "Sentarse y levantarse de una silla": {
+    image: exerciseImage("chair-sit-stand.jpg"),
+    alt: "Secuencia para sentarse y levantarse de una silla estable",
+    steps: [
+      "Usa una silla firme contra la pared y coloca los pies bajo las rodillas.",
+      "Inclina el pecho un poco hacia delante y empuja el suelo para levantarte.",
+      "Lleva la cadera atrás y siéntate despacio, sin dejarte caer.",
+    ],
+    focus: "Usa las manos como apoyo si lo necesitas; progresa cuando te sientas estable.",
+    breathing: "Exhala al levantarte; inhala al sentarte.",
+  },
+  "Remo con apoyo": {
+    image: exerciseImage("supported-row.jpg"),
+    alt: "Secuencia de remo con kettlebell y una mano apoyada",
+    steps: [
+      "Apoya una mano en una superficie firme y lleva la cadera atrás.",
+      "Con la espalda neutra, lleva el codo cargado hacia la cadera.",
+      "Baja la pesa hasta extender el brazo sin girar el torso.",
+    ],
+    focus: "Mantén hombros y caderas apuntando al suelo.",
+    breathing: "Exhala al remar; inhala al bajar.",
+  },
+  "Flexiones contra la pared": {
+    image: exerciseImage("wall-pushup.jpg"),
+    alt: "Secuencia de flexión de brazos contra la pared",
+    steps: [
+      "Pon las manos en la pared a la altura del pecho y da un paso atrás.",
+      "Mantén el cuerpo alineado y dobla los codos acercando el pecho.",
+      "Empuja la pared hasta volver, sin encoger los hombros.",
+    ],
+    focus: "Acércate a la pared si necesitas menos esfuerzo; aléjate solo cuando controles la postura.",
+    breathing: "Inhala al acercarte; exhala al empujar.",
+  },
+  "Caminata con peso a un costado": {
+    image: exerciseImage("suitcase-carry.jpg"),
+    alt: "Caminata erguida con una kettlebell a un costado",
+    steps: [
+      "Toma la kettlebell a un lado y ponte alto con hombros nivelados.",
+      "Camina con pasos cortos sin inclinarte hacia la pesa.",
+      "Apoya la pesa con control y repite al otro lado.",
+    ],
+    focus: "Detente si no puedes evitar que el tronco se incline.",
+    breathing: "Respira de forma continua durante toda la caminata.",
+  },
+  "Marcha en el lugar": {
+    image: exerciseImage("march-warmup.jpg"),
+    alt: "Secuencia de marcha suave en el lugar",
+    steps: [
+      "Ponte alto cerca de un apoyo estable.",
+      "Eleva un pie y luego el otro a una altura cómoda.",
+      "Mantén un ritmo continuo sin golpear el suelo.",
+    ],
+    focus: "La altura de la rodilla importa menos que mantener equilibrio y ritmo.",
+    breathing: "Respira con normalidad; debes poder hablar.",
+  },
+  "Movilidad de hombros y cadera": {
+    image: exerciseImage("mobility.jpg"),
+    alt: "Secuencia de movilidad suave de hombros y cadera con apoyo",
+    steps: [
+      "Haz círculos pequeños y lentos con los hombros.",
+      "Mueve la cadera en un rango cómodo, con apoyo si lo necesitas.",
+      "Reduce el rango ante dolor o pérdida de equilibrio.",
+    ],
+    focus: "Busca soltura, no un estiramiento intenso. Evita rebotes.",
+    breathing: "Exhala durante la parte que se sienta más tensa.",
+  },
+  "Respiración tranquila": calmGuide,
+};
 
 const STORE_KEY = "ruta-fuerte-data-v2";
 const STORE_OWNER_KEY = "ruta-fuerte-owner-v1";
@@ -354,13 +585,43 @@ function App() {
   const [authPassword, setAuthPassword] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
+  const [selectedGuide, setSelectedGuide] = useState<GuideSelection | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
+  const guideModalRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem(THEME_KEY, theme);
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#202733" : "#e3e8ef");
   }, [theme]);
+  useEffect(() => {
+    if (!selectedGuide) return;
+    const previousOverflow = document.body.style.overflow;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedGuide(null);
+      if (event.key !== "Tab" || !guideModalRef.current) return;
+      const focusable = [...guideModalRef.current.querySelectorAll<HTMLElement>("button, a[href]")]
+        .filter(element => !element.hasAttribute("disabled"));
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+      previousFocus?.focus();
+    };
+  }, [selectedGuide]);
 
   useEffect(() => {
     if (!authChecked) return;
@@ -895,10 +1156,19 @@ function App() {
                     const loadState = store.loads[exercise.name];
                     const currentKg = loadState?.kg ?? exercise.load?.initial;
                     const validatedToday = loadState?.comfortableDates.includes(today());
+                    const guide = exerciseGuides[exercise.name];
                     return <div className="exercise-shell" key={exercise.name}>
-                      <button className={`exercise ${store.checks[id] ? "done" : ""}`} onClick={() => toggleExercise(id)} aria-pressed={Boolean(store.checks[id])}>
-                        <i>{store.checks[id] ? "✓" : ""}</i><span><strong>{exercise.name}</strong>{exercise.note && <small>{exercise.note}</small>}</span><b>{exercise.prescription}</b>
-                      </button>
+                      <div className="exercise-row">
+                        <button className={`exercise ${store.checks[id] ? "done" : ""}`} onClick={() => toggleExercise(id)} aria-pressed={Boolean(store.checks[id])}>
+                          <i>{store.checks[id] ? "✓" : ""}</i><span><strong>{exercise.name}</strong>{exercise.note && <small>{exercise.note}</small>}</span><b>{exercise.prescription}</b>
+                        </button>
+                        {guide && <button
+                          className="guide-button"
+                          type="button"
+                          onClick={() => setSelectedGuide({ name: exercise.name, prescription: exercise.prescription, guide })}
+                          aria-label={`Ver cómo hacer ${exercise.name}`}
+                        ><i aria-hidden="true">◎</i><span>VER</span></button>}
+                      </div>
                       {exercise.load && <div className={`load-control ${exercise.load.fixed ? "fixed" : ""}`}>
                         <span className="load-title"><small>CARGA</small><strong>{currentKg} <i>kg</i></strong></span>
                         {!exercise.load.fixed && <>
@@ -1052,6 +1322,31 @@ function App() {
               <a href="https://www.heart.org/en/health-topics/high-blood-pressure/understanding-blood-pressure-readings/when-to-call-911-for-high-blood-pressure" target="_blank" rel="noreferrer">American Heart Association · Lecturas de emergencia ↗</a>
               <a href="https://www.who.int/europe/publications/i/item/9789240014886" target="_blank" rel="noreferrer">OMS · Actividad física y sedentarismo ↗</a>
               <a href="https://mindfit.cl/san-martin/" target="_blank" rel="noreferrer">MindFit San Martín ↗</a>
+            </div>
+          </section>
+        </div>}
+
+        {selectedGuide && <div className="modal-backdrop guide-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setSelectedGuide(null); }}>
+          <section ref={guideModalRef} className="exercise-guide-modal" role="dialog" aria-modal="true" aria-labelledby="guide-title" aria-describedby="guide-description">
+            <button className="modal-close" type="button" autoFocus onClick={() => setSelectedGuide(null)} aria-label="Cerrar guía">×</button>
+            <div className="guide-visual">
+              <img src={selectedGuide.guide.image} alt={selectedGuide.guide.alt} width="900" height="900" loading="eager" decoding="async" />
+              <span>INICIO <i /> MOVIMIENTO CONTROLADO</span>
+            </div>
+            <div className="guide-content">
+              <p className="eyebrow">Guía visual de técnica</p>
+              <h2 id="guide-title">{selectedGuide.name}</h2>
+              <p id="guide-description" className="guide-prescription">{selectedGuide.prescription}</p>
+              <ol>
+                {selectedGuide.guide.steps.map((step, index) => <li key={step}><span>{String(index + 1).padStart(2, "0")}</span><p>{step}</p></li>)}
+              </ol>
+              <div className="technique-cue"><span>◎</span><div><small>CLAVE DE POSTURA</small><p>{selectedGuide.guide.focus}</p></div></div>
+              <div className="breathing-cue"><span>≈</span><div><small>RESPIRACIÓN</small><p>{selectedGuide.guide.breathing}</p></div></div>
+              <p className="guide-safety">La imagen es una referencia. Ajusta cada máquina con el instructor de MindFit y detente ante dolor, mareo, desmayo o falta de aire anormal.</p>
+              <div className="guide-sources">
+                <a href="https://www.heart.org/en/health-topics/high-blood-pressure/changes-you-can-make-to-manage-high-blood-pressure/getting-active-to-control-high-blood-pressure" target="_blank" rel="noreferrer">AHA · Ejercicio e hipertensión ↗</a>
+                <a href="https://www.nhs.uk/live-well/exercise/strength-exercises/" target="_blank" rel="noreferrer">NHS · Técnica básica ↗</a>
+              </div>
             </div>
           </section>
         </div>}

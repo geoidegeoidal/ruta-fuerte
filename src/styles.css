@@ -120,7 +120,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .block-label { display: flex; align-items: center; gap: 12px; margin: 0 5px 9px; }
 .block-label span { padding: 5px 8px; border-radius: 8px; color: var(--accent); box-shadow: var(--pressed); font-size: .6rem; font-weight: 900; }
 .block-label strong { font-size: .78rem; }
+.exercise-row { display: grid; grid-template-columns: minmax(0, 1fr) 58px; align-items: stretch; gap: 9px; margin: 8px 0; }
 .exercise { width: 100%; display: grid; grid-template-columns: 33px 1fr auto; align-items: center; gap: 12px; margin: 8px 0; padding: 12px; border-radius: 17px; background: var(--bg); cursor: pointer; text-align: left; }
+.exercise-row .exercise { min-width: 0; margin: 0; }
 .exercise:hover { box-shadow: var(--small-raised); }
 .exercise > i { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 9px; box-shadow: var(--pressed); color: white; font-style: normal; }
 .exercise > span { display: flex; flex-direction: column; gap: 2px; }
@@ -130,8 +132,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .exercise.done { color: var(--muted); box-shadow: var(--pressed); }
 .exercise.done > i { background: var(--green); box-shadow: none; }
 .exercise.done > span strong { text-decoration: line-through; }
+.guide-button { min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 6px 3px; border-radius: 16px; color: var(--accent); background: var(--bg); box-shadow: var(--small-raised); cursor: pointer; }
+.guide-button:hover { color: var(--accent-dark); }
+.guide-button:active { box-shadow: var(--pressed); }
+.guide-button i { font: 900 1rem/1 var(--font-display); font-style: normal; }
+.guide-button span { font-size: .6rem; font-weight: 900; letter-spacing: .08em; }
 .exercise-shell { margin: 8px 0; border-radius: 18px; }
-.exercise-shell .exercise { margin: 0; }
+.exercise-shell > .exercise { margin: 0; }
 .load-control { display: flex; align-items: center; gap: 12px; margin: 4px 0 13px 44px; padding: 10px 12px; border-radius: 14px; box-shadow: var(--pressed); }
 .load-title { min-width: 68px; display: flex; flex-direction: column; }
 .load-title small { color: var(--muted); font-size: .47rem; font-weight: 900; letter-spacing: .1em; }
@@ -271,6 +278,25 @@ textarea { min-height: 90px; resize: vertical; }
 .auth-gate-panel h2 { margin: 9px 0 10px; font: 900 clamp(2rem, 4vw, 3.3rem)/.95 var(--font-display); letter-spacing: -.055em; }
 .auth-gate-panel .privacy-copy { display: block; margin-top: 18px; line-height: 1.5; }
 .auth-gate-panel .legal-links { margin-top: 22px; padding-bottom: 0; }
+.exercise-guide-modal { position: relative; width: min(980px, 100%); max-height: calc(100vh - 40px); display: grid; grid-template-columns: minmax(320px, .94fr) minmax(360px, 1.06fr); overflow: auto; border-radius: 34px; background: var(--bg); box-shadow: var(--raised); }
+.guide-visual { align-self: stretch; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 15px; margin: 24px; padding: 16px; border-radius: 27px; box-shadow: var(--pressed); }
+.guide-visual img { width: 100%; display: block; border-radius: 21px; background: var(--bg); }
+.guide-visual > span { display: flex; align-items: center; justify-content: center; gap: 9px; color: var(--muted); font-size: .52rem; font-weight: 900; letter-spacing: .1em; }
+.guide-visual > span i { width: 42px; height: 2px; display: inline-block; background: var(--accent); }
+.guide-content { min-width: 0; padding: 52px 46px 38px 22px; }
+.guide-content h2 { max-width: calc(100% - 42px); margin: 7px 0 6px; font: 850 clamp(1.9rem, 4vw, 3.2rem)/.96 var(--font-display); letter-spacing: -.05em; }
+.guide-prescription { margin: 0 0 24px; color: var(--accent); font-size: .74rem; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
+.guide-content ol { display: grid; gap: 9px; margin: 0 0 18px; padding: 0; list-style: none; }
+.guide-content li { display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 11px; padding: 12px 14px; border-radius: 16px; box-shadow: var(--pressed); }
+.guide-content li > span { color: var(--accent); font: 850 .72rem var(--font-display); }
+.guide-content li p, .technique-cue p, .breathing-cue p { margin: 0; font-size: .75rem; line-height: 1.5; }
+.technique-cue, .breathing-cue { display: grid; grid-template-columns: 36px 1fr; align-items: start; gap: 11px; margin-top: 11px; padding: 13px 14px; border-radius: 16px; box-shadow: var(--small-raised); }
+.technique-cue > span, .breathing-cue > span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; color: white; background: var(--accent); font-weight: 900; }
+.breathing-cue > span { background: var(--green); }
+.technique-cue small, .breathing-cue small { display: block; margin-bottom: 4px; color: var(--muted); font-size: .56rem; font-weight: 900; letter-spacing: .1em; }
+.guide-safety { margin: 17px 0 10px; color: var(--muted); font-size: .68rem; line-height: 1.55; }
+.guide-sources { display: flex; flex-wrap: wrap; gap: 8px; }
+.guide-sources a { padding: 8px 10px; border-radius: 10px; color: var(--accent-dark); box-shadow: var(--pressed); font-size: .62rem; font-weight: 800; text-decoration: none; }
 .legal-links { display: flex; justify-content: center; gap: 18px; margin-top: 34px; padding: 12px 0 4px; }
 .legal-links a { color: var(--muted); font-size: .62rem; font-weight: 800; text-decoration: none; }
 .legal-links a:focus-visible, .legal-links a:hover { color: var(--accent); }
@@ -287,12 +313,14 @@ textarea { min-height: 90px; resize: vertical; }
   .welcome { min-height: 225px; padding: 20px 4px 35px; }.welcome h1 { font-size: 3.7rem; }.goal-orbit { flex-basis: 140px; height: 140px; }.goal-orbit:after { width: 112px; height: 112px; }.goal-orbit strong { font-size: 2.8rem; }
   .stats-grid { grid-template-columns: 1fr; gap: 17px; }.stat { min-height: 105px; }.side-stack { grid-template-columns: 1fr; }.history-grid, .plan-grid { grid-template-columns: 1fr; }.evolution-stats { grid-template-columns: 1fr 1fr; }.insights-grid { grid-template-columns: 1fr; }.week-plan { grid-template-columns: repeat(2,1fr); }.profile-strip { grid-template-columns: 1fr 1fr; }.sources > div { grid-template-columns: 1fr; }
   .auth-gate { padding: 86px 18px 28px; }.auth-gate-card { grid-template-columns: 1fr; }.auth-gate-story { display: none; }.auth-gate-panel { padding: 36px 28px; }
+  .exercise-guide-modal { grid-template-columns: minmax(250px, .85fr) minmax(340px, 1.15fr); }.guide-visual { margin: 18px; }.guide-content { padding: 48px 34px 30px 14px; }
 }
 @media (max-width: 520px) {
   .content { padding-inline: 13px; }.logo strong { font-size: .9rem; }.mobile-header { gap: 8px; }.mobile-tools { gap: 6px; }.streak-pill { padding: 9px 8px; font-size: .6rem; }.theme-toggle, .mobile-cloud { flex-basis: 38px; width: 38px; height: 38px; border-radius: 13px; }.welcome { align-items: start; gap: 12px; }.welcome > div:first-child { min-width: 0; }.welcome h1 { font-size: 3rem; }.welcome > div:first-child > p:last-child { font-size: .78rem; }.goal-orbit { flex-basis: 112px; height: 112px; }.goal-orbit:after { width: 88px; height: 88px; }.goal-orbit strong { font-size: 2.2rem; }.goal-orbit span { font-size: .45rem; }
   .workout-card, .week-card, .quick-log, .full-log, .data-tools, .chart-card, .plan-card { padding: 21px; border-radius: 23px; }.card-heading { align-items: start; }.card-heading h2 { font-size: 1.35rem; }.week-selector { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; overflow: visible; padding: 8px 5px; }.week-selector button { min-width: 0; min-height: 60px; gap: 3px; padding: 7px 1px; border-radius: 11px; }.week-selector button span { font-size: .49rem; letter-spacing: .03em; }.week-selector button strong { font-size: .48rem; }.week-selector button small { top: -7px; padding: 2px 4px; font-size: .39rem; }.unlock-panel { grid-template-columns: 1fr; }.level-orb { width: 66px; height: 66px; }.exercise { grid-template-columns: 30px 1fr; }.exercise b { grid-column: 2; color: var(--muted); }.workout-actions { align-items: stretch; flex-direction: column; }.timer { justify-content: space-between; }
   .form-grid, .evolution-stats, .achievements-grid { grid-template-columns: 1fr; }.log-row { grid-template-columns: 58px 1fr; gap: 15px; }.log-metrics { grid-column: 1/-1; justify-content: space-between; }.achievement-summary { grid-template-columns: 1fr; }.achievement-summary > p { grid-column: 1; margin: 0; }.timeline > div { grid-template-columns: 35px 1fr; }.timeline p { grid-column: 2; }.week-plan { gap: 12px; }.week-plan article { min-height: 130px; padding: 16px; }.mobile-nav { left: 7px; right: 7px; bottom: 7px; }.toast { left: 14px; right: 14px; bottom: 92px; text-align: center; }
-  .exercise-shell { grid-template-columns: 1fr; }.load-control { align-items: stretch; }.load-stepper { justify-content: space-between; }.load-history-grid { grid-template-columns: 1fr; }.auth-modal { padding: 24px 20px; border-radius: 26px; }.auth-gate { padding: 76px 12px 18px; }.auth-gate-theme { top: 18px; right: 18px; }.auth-gate-panel { padding: 28px 20px; }.auth-gate-panel h2 { font-size: 2.15rem; }
+  .exercise-row { grid-template-columns: minmax(0, 1fr) 52px; gap: 7px; }.guide-button { border-radius: 14px; }.exercise-shell { grid-template-columns: 1fr; }.load-control { align-items: stretch; }.load-stepper { justify-content: space-between; }.load-history-grid { grid-template-columns: 1fr; }.auth-modal { padding: 24px 20px; border-radius: 26px; }.auth-gate { padding: 76px 12px 18px; }.auth-gate-theme { top: 18px; right: 18px; }.auth-gate-panel { padding: 28px 20px; }.auth-gate-panel h2 { font-size: 2.15rem; }
+  .guide-backdrop { place-items: end center; padding: 9px; }.exercise-guide-modal { width: 100%; max-height: calc(100svh - 18px); grid-template-columns: 1fr; border-radius: 28px; }.guide-visual { margin: 18px 18px 0; padding: 11px; }.guide-visual img { max-height: 37vh; object-fit: contain; }.guide-content { padding: 26px 19px 24px; }.guide-content h2 { font-size: 2rem; }.guide-content li { padding: 11px 12px; }.guide-sources { flex-direction: column; }.guide-sources a { text-align: center; }
 }
 :root[data-theme="dark"] .sidebar { box-shadow: 8px 0 22px rgba(5,8,13,.48); }
 :root[data-theme="dark"] .modal-backdrop { background: rgba(2,5,9,.62); }
