@@ -463,6 +463,13 @@ function App() {
 
         {view === "plan" && <div className="view">
           <PageTitle eyebrow="Tu mapa de ocho semanas" title="Plan completo" text="Dos días fuertes de gimnasio, una sesión corta en casa y caminatas que aumentan gradualmente." />
+          <section className="profile-strip soft-card">
+            <div><small>Estatura</small><strong>1,65 m</strong></div>
+            <div><small>Punto de partida</small><strong>110 kg</strong></div>
+            <div><small>Condición a cuidar</small><strong>Hipertensión</strong></div>
+            <div><small>Equipo en casa</small><strong>Kettlebell · 12 kg</strong></div>
+            <div><small>Contexto</small><strong>Trabajo sedentario</strong></div>
+          </section>
           <section className="week-plan">
             {[["LUN","MindFit","Fuerza A · 60 min"],["MAR","Caminar","15–30 min"],["MIÉ","MindFit","Fuerza B · 60 min"],["JUE","Recuperar","Caminata suave"],["VIE","Casa","Kettlebell · 25 min"],["SÁB","Caminar","15–30 min"],["DOM","Descanso","Moverse suave"]].map((d,i)=><article className={`soft-card ${[0,2,4].includes(i)?"focus":""}`} key={d[0]}><span>{d[0]}</span><h3>{d[1]}</h3><p>{d[2]}</p></article>)}
           </section>
@@ -478,6 +485,15 @@ function App() {
             <article className="soft-card plan-card"><p className="eyebrow">Hábitos base</p><h2>Lo pequeño suma</h2><ul className="habit-list"><li><i>01</i><span><strong>Interrumpe el asiento</strong>Camina 3–5 minutos por cada hora sentado.</span></li><li><i>02</i><span><strong>Duerme con horario</strong>La recuperación también forma parte del plan.</span></li><li><i>03</i><span><strong>Reduce el sodio</strong>Menos embutidos, snacks y comida preparada.</span></li><li><i>04</i><span><strong>No falles dos veces</strong>Si pierdes una sesión, vuelve en la siguiente.</span></li></ul></article>
           </section>
           <div className="medical-note"><strong>Importante:</strong> este plan es educativo y no sustituye la evaluación de tu médico. Con hipertensión y tu nivel actual de sedentarismo, confirma que puedes iniciar ejercicio y no cambies medicamentos por tu cuenta.</div>
+          <section className="sources">
+            <p className="eyebrow">Fuentes y lugar de entrenamiento</p>
+            <div>
+              <a href="https://www.heart.org/en/health-topics/high-blood-pressure/changes-you-can-make-to-manage-high-blood-pressure/getting-active-to-control-high-blood-pressure" target="_blank" rel="noreferrer">American Heart Association · Actividad e hipertensión ↗</a>
+              <a href="https://www.heart.org/en/health-topics/high-blood-pressure/understanding-blood-pressure-readings/when-to-call-911-for-high-blood-pressure" target="_blank" rel="noreferrer">American Heart Association · Lecturas de emergencia ↗</a>
+              <a href="https://www.who.int/europe/publications/i/item/9789240014886" target="_blank" rel="noreferrer">OMS · Actividad física y sedentarismo ↗</a>
+              <a href="https://mindfit.cl/san-martin/" target="_blank" rel="noreferrer">MindFit San Martín ↗</a>
+            </div>
+          </section>
         </div>}
 
         {saveMessage && <div className="toast" role="status">{saveMessage}</div>}
