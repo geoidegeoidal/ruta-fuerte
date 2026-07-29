@@ -575,6 +575,7 @@ function App() {
   const [timer, setTimer] = useState(90);
   const [timerRunning, setTimerRunning] = useState(false);
   const [form, setForm] = useState({ date: today(), weight: "", systolic: "", diastolic: "", activeMinutes: "", steps: "", water: "", energy: "3", note: "" });
+  const [sessionForm, setSessionForm] = useState({ weight: "", systolic: "", diastolic: "", activeMinutes: "", note: "" });
   const [saveMessage, setSaveMessage] = useState("");
   const [cloudUser, setCloudUser] = useState<CloudUser | null>(null);
   const [authChecked, setAuthChecked] = useState(!supabase);
@@ -929,11 +930,44 @@ function App() {
     });
   }
 
-  function finishSession() {
+  function finishSession(event: React.FormEvent) {
+    event.preventDefault();
+    const numericFields = [
+      ["Peso", sessionForm.weight, 30, 400],
+      ["Presión sistólica", sessionForm.systolic, 60, 260],
+      ["Presión diastólica", sessionForm.diastolic, 30, 160],
+      ["Minutos realizados", sessionForm.activeMinutes, 1, 1440],
+    ] as const;
+    const invalid = numericFields.find(([, value, min, max]) => {
+      if (!value) return false;
+      const parsed = Number(value.replace(",", "."));
+      return !Number.isFinite(parsed) || parsed < min || parsed > max;
+    });
+    if (invalid) {
+      setSaveMessage(`${invalid[0]} está fuera del rango permitido.`);
+      window.setTimeout(() => setSaveMessage(""), 3200);
+      return;
+    }
+    if (Boolean(sessionForm.systolic) !== Boolean(sessionForm.diastolic)) {
+      setSaveMessage("Si registras la presión, completa ambos valores.");
+      window.setTimeout(() => setSaveMessage(""), 3200);
+      return;
+    }
+    const existing = store.logs.find(log => log.date === today());
     mergeLog({
-      id: crypto.randomUUID(), date: today(), activeMinutes: session.duration,
+      id: existing?.id || crypto.randomUUID(),
+      date: today(),
+      activeMinutes: sessionForm.activeMinutes ? Number(sessionForm.activeMinutes) : Math.max(existing?.activeMinutes || 0, session.duration),
+      weight: sessionForm.weight ? Number(sessionForm.weight.replace(",", ".")) : existing?.weight,
+      systolic: sessionForm.systolic ? Number(sessionForm.systolic) : existing?.systolic,
+      diastolic: sessionForm.diastolic ? Number(sessionForm.diastolic) : existing?.diastolic,
+      steps: existing?.steps,
+      water: existing?.water,
+      energy: existing?.energy,
+      note: sessionForm.note.slice(0, MAX_NOTE_LENGTH) || existing?.note,
       session: sessionKey, sessionDone: true,
     });
+    setSessionForm({ weight: "", systolic: "", diastolic: "", activeMinutes: "", note: "" });
     setSaveMessage(programLevel < 4 ? "Sesión guardada. Tu próximo nivel está más cerca." : "Sesión guardada. Nivel máximo consolidado.");
     window.setTimeout(() => setSaveMessage(""), 3000);
   }
@@ -1188,10 +1222,39 @@ function App() {
                 </div>)}
               </div>
               {(sessionKey === "lunes" || sessionKey === "miercoles") && <div className="load-safety"><strong>Cómo subir los kilos:</strong> pulsa “Técnica controlada” únicamente si terminaste todas las series, podías hacer 3–4 repeticiones más, respiraste sin aguantar el aire y no hubo dolor, mareo ni falta de aire anormal. Después de dos días distintos, la app suma 5 kg. Ajusta el punto de partida con el instructor de MindFit si la máquina se siente demasiado fácil o difícil.</div>}
-              <div className="workout-actions">
-                <button className="primary" onClick={finishSession}>GUARDAR SESIÓN</button>
-                <div className="timer"><span>Descanso</span><strong>{String(Math.floor(timer / 60)).padStart(2, "0")}:{String(timer % 60).padStart(2, "0")}</strong><button onClick={() => { if (timer === 0) setTimer(90); setTimerRunning(v => !v); }}>{timerRunning ? "Ⅱ" : "▶"}</button><button onClick={() => { setTimerRunning(false); setTimer(90); }}>↺</button></div>
-              </div>
+              <form className="session-completion" onSubmit={finishSession}>
+                <details className="session-extra">
+                  <summary>
+                    <span><strong>Añadir datos opcionales</strong><small>Peso, presión, minutos reales o una nota</small></span>
+                    <i aria-hidden="true">+</i>
+                  </summary>
+                  <div className="session-extra-body">
+                    <p>Todos estos campos son opcionales. Si dejas los minutos vacíos, registraremos los {session.duration} min planificados.</p>
+                    <div className="session-extra-grid">
+                      <label>Peso
+                        <span className="input-with-unit"><input name="session-weight" autoComplete="off" inputMode="decimal" placeholder="Ej. 110,0" value={sessionForm.weight} onChange={e => setSessionForm({...sessionForm, weight:e.target.value})}/><i>kg</i></span>
+                      </label>
+                      <label>Minutos realizados
+                        <span className="input-with-unit"><input name="session-minutes" autoComplete="off" inputMode="numeric" placeholder={`Ej. ${session.duration}`} value={sessionForm.activeMinutes} onChange={e => setSessionForm({...sessionForm, activeMinutes:e.target.value})}/><i>min</i></span>
+                      </label>
+                      <label>Presión sistólica
+                        <input name="session-systolic" autoComplete="off" inputMode="numeric" placeholder="Ej. 130" value={sessionForm.systolic} onChange={e => setSessionForm({...sessionForm, systolic:e.target.value})}/>
+                      </label>
+                      <label>Presión diastólica
+                        <input name="session-diastolic" autoComplete="off" inputMode="numeric" placeholder="Ej. 85" value={sessionForm.diastolic} onChange={e => setSessionForm({...sessionForm, diastolic:e.target.value})}/>
+                      </label>
+                      <label className="session-note">Nota
+                        <textarea name="session-note" autoComplete="off" maxLength={MAX_NOTE_LENGTH} placeholder="Ej. Me sentí con buena energía…" value={sessionForm.note} onChange={e => setSessionForm({...sessionForm, note:e.target.value})}/>
+                      </label>
+                    </div>
+                    {(Number(sessionForm.systolic) > 180 || Number(sessionForm.diastolic) > 120) && <div className="bp-alert">No entrenes. Repite la medición y contacta a un profesional; con síntomas, busca atención urgente.</div>}
+                  </div>
+                </details>
+                <div className="workout-actions">
+                  <button className="primary" type="submit">COMPLETAR ENTRENAMIENTO</button>
+                  <div className="timer"><span>Descanso</span><strong>{String(Math.floor(timer / 60)).padStart(2, "0")}:{String(timer % 60).padStart(2, "0")}</strong><button type="button" onClick={() => { if (timer === 0) setTimer(90); setTimerRunning(v => !v); }} aria-label={timerRunning ? "Pausar temporizador" : "Iniciar temporizador"}>{timerRunning ? "Ⅱ" : "▶"}</button><button type="button" onClick={() => { setTimerRunning(false); setTimer(90); }} aria-label="Reiniciar temporizador">↺</button></div>
+                </div>
+              </form>
             </article>
 
             <aside className="side-stack">
@@ -1202,15 +1265,6 @@ function App() {
                 <GapRow label="Actividad" value={weekMinutes} target={150} unit="min" />
                 <p className="gap-message">{weekMinutes >= 150 ? "Meta semanal conseguida. Excelente." : `Faltan ${Math.max(0, 150 - weekMinutes)} minutos. Cada caminata suma.`}</p>
               </article>
-              <article className="soft-card quick-log">
-                <p className="eyebrow">Registro rápido</p><h3>¿Cómo vas?</h3>
-                <form onSubmit={saveDailyLog}>
-                  <div className="field-pair"><label>Peso<input inputMode="decimal" placeholder="110,0" value={form.weight} onChange={e => setForm({...form, weight:e.target.value})}/><span>kg</span></label><label>Minutos<input inputMode="numeric" placeholder="20" value={form.activeMinutes} onChange={e => setForm({...form, activeMinutes:e.target.value})}/><span>min</span></label></div>
-                  <div className="field-pair"><label>Presión sistólica<input inputMode="numeric" placeholder="130" value={form.systolic} onChange={e => setForm({...form, systolic:e.target.value})}/></label><label>Diastólica<input inputMode="numeric" placeholder="85" value={form.diastolic} onChange={e => setForm({...form, diastolic:e.target.value})}/></label></div>
-                  {(Number(form.systolic) > 180 || Number(form.diastolic) > 120) && <div className="bp-alert">No entrenes. Repite la medición y contacta a un profesional; con síntomas, busca atención urgente.</div>}
-                  <button className="primary full">GUARDAR REGISTRO</button>
-                </form>
-              </article>
             </aside>
           </section>
         </div>}
@@ -1219,7 +1273,9 @@ function App() {
           <PageTitle eyebrow="Tu bitácora" title="Historial diario" text="Registra lo suficiente para ver patrones. No necesitas perseguir números perfectos." />
           <section className="history-grid">
             <form className="soft-card full-log" onSubmit={saveDailyLog}>
-              <h2>Nuevo registro</h2>
+              <p className="eyebrow">Para días sin entrenamiento</p>
+              <h2>Registrar salud o actividad</h2>
+              <p className="form-intro">Úsalo para una caminata, un día de descanso o para corregir una fecha anterior. Los entrenamientos se guardan desde “Hoy”.</p>
               <div className="form-grid">
                 <label>Fecha<input type="date" value={form.date} onChange={e => setForm({...form,date:e.target.value})}/></label>
                 <label>Peso<input inputMode="decimal" min="30" max="400" placeholder="kg" value={form.weight} onChange={e => setForm({...form,weight:e.target.value})}/></label>
@@ -1262,16 +1318,46 @@ function App() {
             <p className="chart-caption">Cada columna muestra hasta 60 minutos. Los días en cero no son fracasos: son información para ajustar la semana.</p>
           </section>
           <section className="soft-card load-history-card">
-            <div className="card-heading"><div><p className="eyebrow">Sobrecarga progresiva</p><h2>Evolución de cargas</h2></div><span className="week-total">{store.loadHistory.length} hitos</span></div>
-            <div className="load-history-grid">
+            <div className="load-history-heading">
+              <div><p className="eyebrow">Sobrecarga progresiva</p><h2>Evolución de cargas</h2><p>Compara tu punto de partida con la carga actual y revisa qué falta para liberar el siguiente aumento.</p></div>
+              <div className="load-summary"><strong>{loadCatalog.filter(exercise => (store.loads[exercise.name]?.kg ?? exercise.load!.initial) > (store.loads[exercise.name]?.initialKg ?? exercise.load!.initial)).length}</strong><span>ejercicios<br/>con avance</span></div>
+            </div>
+            <div className="load-progress-list">
               {loadCatalog.map(exercise => {
                 const progress = store.loads[exercise.name];
                 const current = progress?.kg ?? exercise.load!.initial;
                 const initial = progress?.initialKg ?? exercise.load!.initial;
-                return <article key={exercise.name}>
-                  <div><small>{exercise.load!.fixed ? "PESO FIJO" : "CARGA ACTUAL"}</small><h3>{exercise.name}</h3></div>
-                  <strong>{current}<i> kg</i></strong>
-                  <span className={current > initial ? "gain" : ""}>{current > initial ? `+${current - initial} kg` : exercise.load!.fixed ? "12 kg" : "Base"}</span>
+                const increase = current - initial;
+                const validations = progress?.comfortableDates.length || 0;
+                const history = store.loadHistory
+                  .filter(item => item.name === exercise.name)
+                  .filter((item, index, entries) => index === 0 || item.kg !== entries[index - 1].kg)
+                  .slice(-4);
+                return <article className="load-progress-item" key={exercise.name}>
+                  <div className="load-progress-top">
+                    <div className="load-exercise-name">
+                      <small>{exercise.load!.fixed ? "KETTLEBELL · CARGA FIJA" : "MÁQUINA · PROGRESIÓN POR TÉCNICA"}</small>
+                      <h3>{exercise.name}</h3>
+                    </div>
+                    <span className={`load-delta ${increase > 0 ? "gain" : ""}`}>{increase > 0 ? `+${increase} kg` : "Carga base"}</span>
+                  </div>
+                  <div className="load-values" role="group" aria-label={`Carga inicial ${initial} kilos; carga actual ${current} kilos`}>
+                    <span><small>INICIO</small><strong>{initial}<i> kg</i></strong></span>
+                    <i className="load-arrow" aria-hidden="true">→</i>
+                    <span className="current"><small>AHORA</small><strong>{current}<i> kg</i></strong></span>
+                  </div>
+                  {exercise.load!.fixed
+                    ? <div className="fixed-load-path"><span aria-hidden="true">12</span><p><strong>El peso no cambia.</strong> Avanza sumando repeticiones o vueltas con técnica controlada.</p></div>
+                    : <div className="validation-path">
+                        <div><span role="progressbar" aria-label={`Validaciones técnicas de ${exercise.name}`} aria-valuemin={0} aria-valuemax={2} aria-valuenow={validations}><i style={{width:`${validations / 2 * 100}%`}}/></span><strong>{validations}/2 validaciones</strong></div>
+                        <p>{validations === 1 ? `Una sesión técnica más libera ${current + exercise.load!.step} kg.` : `Valida 2 sesiones cómodas para liberar ${current + exercise.load!.step} kg.`}</p>
+                      </div>}
+                  <div className="load-trail">
+                    <small>ÚLTIMOS CAMBIOS</small>
+                    {history.length
+                      ? <ol>{history.map((item, index) => <li key={`${item.date}-${item.kg}-${index}`}><strong>{item.kg} kg</strong><span>{new Intl.DateTimeFormat("es-CL", { day: "2-digit", month: "short" }).format(new Date(`${item.date}T12:00:00`))}</span></li>)}</ol>
+                      : <p>Aún no hay cambios. Esta es tu carga inicial.</p>}
+                  </div>
                 </article>;
               })}
             </div>
