@@ -32,6 +32,10 @@ npm run dev
    `VITE_SUPABASE_PUBLISHABLE_KEY` en *Settings → Secrets and variables →
    Actions → Variables*.
 
+El inicio con Google está implementado mediante PKCE y protegido por la variable
+`VITE_GOOGLE_AUTH_ENABLED`. Consulta `GOOGLE_OAUTH_SETUP.md` para activar el
+proveedor sin exponer su Client Secret.
+
 La tabla aplica seguridad por filas: cada cuenta autenticada solo puede leer y
 modificar sus propios datos. Nunca uses una clave `service_role` en el
 navegador.

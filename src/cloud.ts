@@ -2,19 +2,33 @@ import { createClient, type User } from "@supabase/supabase-js";
 
 const projectUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+const googleEnabled = import.meta.env.VITE_GOOGLE_AUTH_ENABLED === "true";
 
 export const cloudConfigured = Boolean(projectUrl && publishableKey);
+export const googleAuthEnabled = cloudConfigured && googleEnabled;
 export const supabase = cloudConfigured
   ? createClient(projectUrl!, publishableKey!, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
+        flowType: "pkce",
       },
     })
   : null;
 
 export type CloudUser = User;
+
+export async function signInWithGoogle() {
+  if (!supabase || !googleAuthEnabled) throw new Error("Google authentication is not enabled");
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: "https://geoidegeoidal.github.io/ruta-fuerte/",
+    },
+  });
+  if (error) throw error;
+}
 
 export async function readCloudStore() {
   if (!supabase) return null;

@@ -13,6 +13,7 @@ const html = read("index.html");
 for (const directive of [
   "default-src 'self'",
   "script-src 'self'",
+  "script-src-attr 'none'",
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'self'",
@@ -38,10 +39,12 @@ for (const [pattern, message] of [
   [/dangerouslySetInnerHTML/, "dangerouslySetInnerHTML is forbidden"],
   [/\beval\s*\(/, "eval is forbidden"],
   [/document\.write\s*\(/, "document.write is forbidden"],
-  [/\bsb_secret_|\bservice_role\b/, "secret/service role material found in browser source"],
+  [/\bsb_secret_|\bservice_role\b|\bGOCSPX-/, "secret/service role material found in browser source"],
 ]) {
   if (pattern.test(source)) failures.push(message);
 }
+requireMatch(source, /flowType:\s*"pkce"/, "Supabase Auth must use PKCE");
+requireMatch(source, /redirectTo:\s*"https:\/\/geoidegeoidal\.github\.io\/ruta-fuerte\/"/, "OAuth redirect must be fixed to the production URL");
 
 for (const workflow of collect(join(root, ".github", "workflows"))) {
   const text = readFileSync(workflow, "utf8");

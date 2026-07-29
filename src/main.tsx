@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   cloudConfigured,
+  googleAuthEnabled,
   readCloudStore,
+  signInWithGoogle,
   supabase,
   writeCloudStore,
   type CloudUser,
@@ -613,6 +615,17 @@ function App() {
     }
   }
 
+  async function startGoogleSignIn() {
+    setAuthBusy(true);
+    setAuthMessage("");
+    try {
+      await signInWithGoogle();
+    } catch {
+      setAuthMessage("No pudimos iniciar con Google. Inténtalo nuevamente.");
+      setAuthBusy(false);
+    }
+  }
+
   async function signOutSecurely() {
     try {
       const { error } = await supabase!.auth.signOut();
@@ -984,6 +997,12 @@ function App() {
               <h2 id="auth-title">Continúa en cualquier dispositivo.</h2>
               <p>Crea una cuenta para guardar peso, presión, sesiones y cargas. Los registros que ya tienes en este navegador se subirán al conectarte.</p>
               {!cloudConfigured ? <div className="auth-message error">La sincronización todavía no está configurada en esta versión.</div> : <div className="auth-form">
+                {googleAuthEnabled && <>
+                  <button className="google-action" disabled={authBusy} onClick={startGoogleSignIn}>
+                    <span aria-hidden="true">G</span> CONTINUAR CON GOOGLE
+                  </button>
+                  <div className="auth-divider"><span>o usa tu correo</span></div>
+                </>}
                 <label>Correo<input type="email" inputMode="email" autoComplete="email" maxLength={254} spellCheck={false} value={authEmail} onChange={event => setAuthEmail(event.target.value)} placeholder="tu@correo.cl" /></label>
                 <label>Contraseña<input type="password" autoComplete="current-password" minLength={12} maxLength={128} spellCheck={false} value={authPassword} onChange={event => setAuthPassword(event.target.value)} placeholder="12+ · Aa1!" /></label>
                 {authMessage && <div className="auth-message">{authMessage}</div>}
@@ -997,6 +1016,7 @@ function App() {
 
         {saveMessage && <div className="toast" role="status">{saveMessage}</div>}
 
+        <footer className="legal-links"><a href="./privacy.html">Privacidad</a><a href="./terms.html">Términos</a></footer>
         <nav className="mobile-nav" aria-label="Navegación móvil">{nav.map(item=><button key={item.key} className={view===item.key?"active":""} onClick={()=>setView(item.key)}><i>{item.icon}</i><span>{item.key==="evolucion"?"Evolución":item.label.split(" ")[0]}</span></button>)}</nav>
       </main>
     </div>

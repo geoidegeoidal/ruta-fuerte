@@ -7,7 +7,8 @@ estática en GitHub Pages y Supabase para autenticación y persistencia.
 
 - HTTPS y HSTS proporcionados por GitHub Pages y Supabase.
 - Política de seguridad de contenido (CSP) que bloquea scripts, objetos, marcos
-  y conexiones no autorizadas.
+  y conexiones no autorizadas, además de eventos inline y sinks DOM protegidos
+  con Trusted Types en navegadores compatibles.
 - Clave publicable en el navegador; nunca una clave secreta o `service_role`.
 - Row Level Security forzada en `public.user_data`, con políticas vinculadas a
   `auth.uid()` y sin privilegios para `anon`.
@@ -16,6 +17,8 @@ estática en GitHub Pages y Supabase para autenticación y persistencia.
 - Separación local por propietario y borrado de datos del dispositivo al cerrar
   sesión, para impedir que otra cuenta herede el historial anterior.
 - Mensajes de autenticación genéricos y rate limiting provisto por Supabase.
+- OAuth de Google mediante Authorization Code + PKCE, URL de retorno constante
+  y scopes mínimos de identidad.
 - Auditoría semanal de dependencias y actualizaciones automáticas con
   Dependabot.
 
@@ -32,6 +35,22 @@ GitHub Pages no permite definir cabeceras HTTP personalizadas por repositorio.
 Por eso CSP y Referrer Policy se aplican con etiquetas `meta`; controles como
 `frame-ancestors` o `X-Content-Type-Options` requerirían un hosting o proxy que
 permita cabeceras personalizadas.
+
+## Principales clases de exploit
+
+| Riesgo | Control |
+| --- | --- |
+| XSS y DOM XSS | Escapado de React, CSP, Trusted Types y prohibición de HTML dinámico |
+| Inyección SQL | SDK/PostgREST parametrizado, esquema sin SQL construido desde entradas y RLS |
+| IDOR / acceso cruzado | `auth.uid() = user_id` en cada operación y `anon` sin privilegios |
+| CSRF / interceptación OAuth | Bearer tokens administrados por Supabase, PKCE y retorno fijo |
+| Open redirect | La URL posterior al login está compilada como constante permitida |
+| Credential stuffing | Google OAuth, contraseñas fuertes, confirmación de correo y rate limits |
+| Archivos o payloads abusivos | JSON con lista permitida y límites de 1 MB en cliente y base |
+| Supply chain | Lockfile, auditoría automática, Dependabot y Actions fijadas por SHA |
+| SSRF | No hay backend que acepte URLs ni realice solicitudes arbitrarias |
+
+Estos controles reducen riesgo; no convierten la aplicación en invulnerable.
 
 ## Reportar un problema
 
