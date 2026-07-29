@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   cloudConfigured,
@@ -14,7 +14,31 @@ import "./styles.css";
 
 type View = "hoy" | "historial" | "evolucion" | "logros" | "plan";
 type Theme = "light" | "dark";
-type SessionKey = "lunes" | "miercoles" | "viernes" | "caminar" | "recuperar";
+type SessionKey = "lunes" | "miercoles" | "viernes" | "caminar" | "intervalos" | "recuperar";
+type ProgramStatKey =
+  | "gym"
+  | "kettlebell"
+  | "walk15"
+  | "walk20"
+  | "walk25"
+  | "walk30"
+  | "walk35"
+  | "walk40"
+  | "minutes"
+  | "weeks150";
+type ProgramRequirement = { key: ProgramStatKey; label: string; target: number };
+type ProgramLevelDefinition = {
+  level: number;
+  name: string;
+  phase: string;
+  summary: string;
+  reward: string;
+  walkTarget: number;
+  walkDays: number;
+  gymSets: 2 | 3;
+  kettlebellRounds: 2 | 3;
+  requirements: ProgramRequirement[];
+};
 type LogEntry = {
   id: string;
   date: string;
@@ -57,6 +81,7 @@ type GuideSelection = {
 };
 
 const exerciseImage = (file: string) => `${import.meta.env.BASE_URL}exercises/${file}`;
+const avatarImage = `${import.meta.env.BASE_URL}avatar/evolucion-8-niveles-optimizada.webp`;
 const walkingGuide: ExerciseGuide = {
   image: exerciseImage("treadmill-walk.jpg"),
   alt: "Secuencia de caminata erguida y controlada en caminadora",
@@ -91,6 +116,7 @@ const exerciseGuides: Record<string, ExerciseGuide> = {
   "Caminar muy suave": walkingGuide,
   "Caminata muy suave": walkingGuide,
   "Caminata a ritmo conversable": walkingGuide,
+  "Caminata por bloques": walkingGuide,
   "Vuelta a la calma": walkingGuide,
   "Semanas 1–2": walkingGuide,
   "Semanas 3–4": walkingGuide,
@@ -291,6 +317,141 @@ const dateLabel = (date: string, full = false) =>
     ? { weekday: "long", day: "numeric", month: "long" }
     : { day: "2-digit", month: "short" }).format(new Date(`${date}T12:00:00`));
 
+const programLevels: ProgramLevelDefinition[] = [
+  {
+    level: 1,
+    name: "Punto de partida",
+    phase: "Adaptar",
+    summary: "Aprender la técnica, respirar sin bloquear y terminar con energía disponible.",
+    reward: "Plan base: 2 gimnasios, kettlebell controlada y caminatas de 15 minutos.",
+    walkTarget: 15,
+    walkDays: 2,
+    gymSets: 2,
+    kettlebellRounds: 2,
+    requirements: [],
+  },
+  {
+    level: 2,
+    name: "Preparado",
+    phase: "Construir",
+    summary: "La semana empieza a tener estructura y un tercer día aeróbico opcional.",
+    reward: "Caminatas de 20 minutos y jueves activo opcional.",
+    walkTarget: 20,
+    walkDays: 3,
+    gymSets: 2,
+    kettlebellRounds: 2,
+    requirements: [
+      { key: "gym", label: "Gym · 60 min", target: 2 },
+      { key: "kettlebell", label: "Kettlebell · 25 min", target: 1 },
+      { key: "walk15", label: "Caminatas · 15 min", target: 2 },
+    ],
+  },
+  {
+    level: 3,
+    name: "En movimiento",
+    phase: "Base activa",
+    summary: "Aumenta el volumen sin entrenar al fallo ni acelerar la carga.",
+    reward: "3 series en máquinas, 3 vueltas de kettlebell y caminatas de 25 minutos.",
+    walkTarget: 25,
+    walkDays: 3,
+    gymSets: 3,
+    kettlebellRounds: 3,
+    requirements: [
+      { key: "gym", label: "Gym acumulado", target: 6 },
+      { key: "kettlebell", label: "Kettlebell acumulado", target: 3 },
+      { key: "walk20", label: "Caminatas · 20 min", target: 6 },
+    ],
+  },
+  {
+    level: 4,
+    name: "Movilidad activa",
+    phase: "Ritmo estable",
+    summary: "La actividad deja de ser aislada y empieza a cubrir una semana completa.",
+    reward: "Caminatas de 30 minutos y objetivo semanal de 150 minutos.",
+    walkTarget: 30,
+    walkDays: 3,
+    gymSets: 3,
+    kettlebellRounds: 3,
+    requirements: [
+      { key: "gym", label: "Gym acumulado", target: 10 },
+      { key: "kettlebell", label: "Kettlebell acumulado", target: 5 },
+      { key: "walk25", label: "Caminatas · 25 min", target: 8 },
+      { key: "minutes", label: "Minutos acumulados", target: 750 },
+    ],
+  },
+  {
+    level: 5,
+    name: "Dominio de kettlebell",
+    phase: "Capacidad",
+    summary: "La técnica ya permite tolerar más trabajo sin usar movimientos balísticos.",
+    reward: "Se desbloquea la caminata por bloques del sábado.",
+    walkTarget: 30,
+    walkDays: 3,
+    gymSets: 3,
+    kettlebellRounds: 3,
+    requirements: [
+      { key: "gym", label: "Gym acumulado", target: 14 },
+      { key: "kettlebell", label: "Kettlebell acumulado", target: 7 },
+      { key: "walk30", label: "Caminatas · 30 min", target: 10 },
+      { key: "minutes", label: "Minutos acumulados", target: 1200 },
+    ],
+  },
+  {
+    level: 6,
+    name: "Constancia",
+    phase: "Resistencia",
+    summary: "El foco cambia de empezar a sostener semanas completas de actividad.",
+    reward: "Kettlebell de 30 minutos, repeticiones ampliadas y caminatas de 35 minutos.",
+    walkTarget: 35,
+    walkDays: 3,
+    gymSets: 3,
+    kettlebellRounds: 3,
+    requirements: [
+      { key: "gym", label: "Gym acumulado", target: 20 },
+      { key: "kettlebell", label: "Kettlebell acumulado", target: 10 },
+      { key: "walk30", label: "Caminatas · 30 min", target: 18 },
+      { key: "minutes", label: "Minutos acumulados", target: 2000 },
+      { key: "weeks150", label: "Semanas · 150 min", target: 2 },
+    ],
+  },
+  {
+    level: 7,
+    name: "Disciplina sólida",
+    phase: "Autonomía",
+    summary: "La regularidad manda: el progreso se mide por semanas, no por días perfectos.",
+    reward: "Caminatas de 40 minutos y bloques ágiles algo más largos, siempre conversables.",
+    walkTarget: 40,
+    walkDays: 3,
+    gymSets: 3,
+    kettlebellRounds: 3,
+    requirements: [
+      { key: "gym", label: "Gym acumulado", target: 28 },
+      { key: "kettlebell", label: "Kettlebell acumulado", target: 14 },
+      { key: "walk35", label: "Caminatas · 35 min", target: 24 },
+      { key: "minutes", label: "Minutos acumulados", target: 3200 },
+      { key: "weeks150", label: "Semanas · 150 min", target: 5 },
+    ],
+  },
+  {
+    level: 8,
+    name: "Campeón Ruta Fuerte",
+    phase: "Hábito fuerte",
+    summary: "El plan está completamente abierto; ahora importa mantenerlo y ajustarlo con tu equipo de salud.",
+    reward: "Programa completo y modo de mantenimiento desbloqueado.",
+    walkTarget: 40,
+    walkDays: 3,
+    gymSets: 3,
+    kettlebellRounds: 3,
+    requirements: [
+      { key: "gym", label: "Gym acumulado", target: 40 },
+      { key: "kettlebell", label: "Kettlebell acumulado", target: 20 },
+      { key: "walk40", label: "Caminatas · 40 min", target: 32 },
+      { key: "minutes", label: "Minutos acumulados", target: 5000 },
+      { key: "weeks150", label: "Semanas · 150 min", target: 8 },
+    ],
+  },
+];
+
 const sessions: Record<SessionKey, {
   label: string; place: string; title: string; duration: number;
   blocks: { time: string; title: string; exercises: Exercise[] }[];
@@ -354,6 +515,20 @@ const sessions: Record<SessionKey, {
       { name: "Semanas 7–8", prescription: "30 min · 3 días", note: "Si cuesta hablar, baja el ritmo." },
     ]}],
   },
+  intervalos: {
+    label: "Bloques", place: "Afuera o caminadora", title: "Cambios de ritmo", duration: 30,
+    blocks: [
+      { time: "0–5", title: "Entrada gradual", exercises: [
+        { name: "Caminata muy suave", prescription: "5 min", note: "Sube el ritmo poco a poco." },
+      ] },
+      { time: "5–25", title: "Bloques conversables", exercises: [
+        { name: "Caminata por bloques", prescription: "4 × 4 min", note: "Alterna tramo ágil y recuperación suave; nunca llegues a jadear." },
+      ] },
+      { time: "FINAL", title: "Vuelta a la calma", exercises: [
+        { name: "Vuelta a la calma", prescription: "5 min suaves", note: "No te detengas de golpe." },
+      ] },
+    ],
+  },
   recuperar: {
     label: "Recuperar", place: "En casa o al aire libre", title: "Movilidad suave", duration: 15,
     blocks: [{ time: "15 MIN", title: "Mover sin exigir", exercises: [
@@ -400,7 +575,7 @@ const isDate = (value: unknown): value is string => {
     parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
 };
 const isSession = (value: unknown): value is SessionKey =>
-  typeof value === "string" && ["lunes", "miercoles", "viernes", "caminar", "recuperar"].includes(value);
+  typeof value === "string" && ["lunes", "miercoles", "viernes", "caminar", "intervalos", "recuperar"].includes(value);
 
 function normalizeStore(value: unknown): Store {
   if (!isRecord(value)) return { ...initialStore };
@@ -515,6 +690,28 @@ function calculateStreak(logs: LogEntry[]) {
     cursor.setDate(cursor.getDate() - 1);
   }
   return streak;
+}
+
+function countActiveWeeks(logs: LogEntry[], targetMinutes = 150) {
+  const minutesByWeek = new Map<string, number>();
+  for (const log of logs) {
+    const start = getWeekStart(new Date(`${log.date}T12:00:00`)).toLocaleDateString("en-CA");
+    minutesByWeek.set(start, (minutesByWeek.get(start) || 0) + (log.activeMinutes || 0));
+  }
+  return [...minutesByWeek.values()].filter(minutes => minutes >= targetMinutes).length;
+}
+
+function AvatarSprite({ level, compact = false, label }: { level: number; compact?: boolean; label?: string }) {
+  const index = Math.max(0, Math.min(7, level - 1));
+  const x = (index % 4) * (100 / 3);
+  const y = Math.floor(index / 4) * 100;
+  return <div
+    className={`avatar-sprite ${compact ? "compact" : ""}`}
+    style={{ backgroundImage: `url("${avatarImage}")`, backgroundPosition: `${x}% ${y}%` }}
+    role={label ? "img" : undefined}
+    aria-label={label}
+    aria-hidden={label ? undefined : true}
+  />;
 }
 
 function WeightChart({ logs }: { logs: LogEntry[] }) {
@@ -707,60 +904,112 @@ function App() {
   const weekStart = getWeekStart();
   const weekLogs = store.logs.filter(l => new Date(`${l.date}T12:00:00`) >= weekStart);
   const weekGym = weekLogs.filter(l => l.sessionDone && (l.session === "lunes" || l.session === "miercoles")).length;
-  const weekWalks = weekLogs.filter(l => l.activeMinutes > 0 && (l.session === "caminar" || !l.session)).length;
+  const weekWalks = weekLogs.filter(l => l.activeMinutes > 0 && (l.session === "caminar" || l.session === "intervalos" || !l.session)).length;
   const weekMinutes = weekLogs.reduce((sum, l) => sum + l.activeMinutes, 0);
   const qualifiedGym = store.logs.filter(l => l.sessionDone && (l.session === "lunes" || l.session === "miercoles") && l.activeMinutes >= 60).length;
   const qualifiedKettlebell = store.logs.filter(l => l.sessionDone && l.session === "viernes" && l.activeMinutes >= 25).length;
-  const walks15 = store.logs.filter(l => l.session === "caminar" && l.activeMinutes >= 15).length;
-  const walks20 = store.logs.filter(l => l.session === "caminar" && l.activeMinutes >= 20).length;
-  const walks25 = store.logs.filter(l => l.session === "caminar" && l.activeMinutes >= 25).length;
-  let programLevel = 1;
-  if (qualifiedGym >= 2 && qualifiedKettlebell >= 1 && walks15 >= 2) programLevel = 2;
-  if (qualifiedGym >= 6 && qualifiedKettlebell >= 3 && walks20 >= 6) programLevel = 3;
-  if (qualifiedGym >= 10 && qualifiedKettlebell >= 5 && walks25 >= 8 && totalMinutes >= 750) programLevel = 4;
-  const walkTarget = [15, 20, 25, 30][programLevel - 1];
-  const walkTargetCount = programLevel === 1 ? 2 : 3;
-  const requirements = programLevel === 1
-    ? [{ label: "Gym · 60 min", value: qualifiedGym, target: 2 }, { label: "Kettlebell · 25 min", value: qualifiedKettlebell, target: 1 }, { label: "Caminatas · 15 min", value: walks15, target: 2 }]
-    : programLevel === 2
-      ? [{ label: "Gym acumulado", value: qualifiedGym, target: 6 }, { label: "Kettlebell acumulado", value: qualifiedKettlebell, target: 3 }, { label: "Caminatas · 20 min", value: walks20, target: 6 }]
-      : programLevel === 3
-        ? [{ label: "Gym acumulado", value: qualifiedGym, target: 10 }, { label: "Kettlebell acumulado", value: qualifiedKettlebell, target: 5 }, { label: "Caminatas · 25 min", value: walks25, target: 8 }, { label: "Minutos totales", value: totalMinutes, target: 750 }]
-        : [];
+  const isWalkLog = (log: LogEntry) => log.session === "caminar" || log.session === "intervalos";
+  const walkCountAt = (minutes: number) => store.logs.filter(log => isWalkLog(log) && log.sessionDone && log.activeMinutes >= minutes).length;
+  const activeWeeks150 = countActiveWeeks(store.logs);
+  const programStats: Record<ProgramStatKey, number> = {
+    gym: qualifiedGym,
+    kettlebell: qualifiedKettlebell,
+    walk15: walkCountAt(15),
+    walk20: walkCountAt(20),
+    walk25: walkCountAt(25),
+    walk30: walkCountAt(30),
+    walk35: walkCountAt(35),
+    walk40: walkCountAt(40),
+    minutes: totalMinutes,
+    weeks150: activeWeeks150,
+  };
+  let currentLevelDefinition = programLevels[0];
+  for (const candidate of programLevels.slice(1)) {
+    if (candidate.requirements.every(requirement => programStats[requirement.key] >= requirement.target)) {
+      currentLevelDefinition = candidate;
+    } else {
+      break;
+    }
+  }
+  const programLevel = currentLevelDefinition.level;
+  const nextLevelDefinition = programLevels[programLevel] || null;
+  const walkTarget = currentLevelDefinition.walkTarget;
+  const walkTargetCount = currentLevelDefinition.walkDays;
+  const requirements = (nextLevelDefinition?.requirements || []).map(requirement => ({
+    ...requirement,
+    value: programStats[requirement.key],
+  }));
   const unlockProgress = requirements.length
     ? Math.round(requirements.reduce((sum, item) => sum + Math.min(1, item.value / item.target), 0) / requirements.length * 100)
     : 100;
-  const activeSchedule = weeklySchedule.map((day, index) =>
-    index === 3 && programLevel >= 2
-      ? { ...day, key: "caminar" as SessionKey, detail: "Caminata +" }
-      : day
-  );
+  const activeSchedule = weeklySchedule.map((day, index) => {
+    if (index === 3 && programLevel >= 2) return { ...day, key: "caminar" as SessionKey, detail: "Caminata +" };
+    if (index === 5 && programLevel >= 5) return { ...day, key: "intervalos" as SessionKey, detail: "Por bloques" };
+    return day;
+  });
   const sessionKey = activeSchedule[selectedDay].key;
   const baseSession = sessions[sessionKey];
+  const intervalCycles = programLevel >= 8 ? 6 : programLevel >= 7 ? 5 : 4;
+  const intervalAgileMinutes = Math.max(2, Math.floor((walkTarget - 10) / intervalCycles) - 1);
+  const kettlebellPrescription = (exercise: Exercise) => {
+    if (programLevel < 6) return exercise.prescription;
+    const advanced = programLevel >= 8;
+    const prescriptions: Record<string, string> = {
+      "Peso muerto con kettlebell": advanced ? "15 rep" : "12 rep",
+      "Sentarse y levantarse de una silla": advanced ? "15 rep" : "12 rep",
+      "Remo con apoyo": advanced ? "12 por lado" : "10 por lado",
+      "Flexiones contra la pared": advanced ? "15 rep" : "12 rep",
+      "Caminata con peso a un costado": advanced ? "45 s/lado" : "35–40 s/lado",
+      "Marcha en el lugar": advanced ? "90 s" : "75 s",
+    };
+    return prescriptions[exercise.name] || exercise.prescription;
+  };
   const session = {
     ...baseSession,
-    duration: sessionKey === "caminar" ? walkTarget : baseSession.duration,
+    duration: sessionKey === "caminar" || sessionKey === "intervalos"
+      ? walkTarget
+      : sessionKey === "viernes" && programLevel >= 6
+        ? 30
+        : baseSession.duration,
     blocks: sessionKey === "caminar"
       ? [{ time: `${walkTarget} MIN`, title: `Objetivo del Nivel ${programLevel}`, exercises: [
           { name: "Caminata a ritmo conversable", prescription: `${walkTarget} min`, note: "Debes poder hablar en frases completas." },
           { name: "Vuelta a la calma", prescription: "3 min suaves", note: "No te detengas de golpe." },
         ]}]
+      : sessionKey === "intervalos"
+        ? [
+            { time: "0–5", title: "Entrada gradual", exercises: [
+              { name: "Caminata muy suave", prescription: "5 min", note: "Sube el ritmo poco a poco." },
+            ] },
+            { time: `5–${walkTarget - 5}`, title: "Bloques conversables", exercises: [
+              {
+                name: "Caminata por bloques",
+                prescription: `${intervalCycles} × ${intervalAgileMinutes} min ágil + 1 min suave`,
+                note: "Ágil no significa jadear: debes poder decir frases breves.",
+              },
+            ] },
+            { time: "FINAL", title: "Vuelta a la calma", exercises: [
+              { name: "Vuelta a la calma", prescription: "5 min suaves", note: "No te detengas de golpe." },
+            ] },
+          ]
       : baseSession.blocks.map(block => ({
           ...block,
           title: sessionKey === "viernes" && block.title.startsWith("Circuito")
-            ? `Circuito · ${programLevel >= 3 ? 3 : 2} vueltas`
+            ? `Circuito · ${currentLevelDefinition.kettlebellRounds} vueltas`
             : block.title,
           exercises: block.exercises.map(exercise => ({
             ...exercise,
-            prescription: programLevel >= 3 && (sessionKey === "lunes" || sessionKey === "miercoles")
-              ? exercise.prescription.replace(/^2 ×/, "3 ×")
-              : exercise.prescription,
+            prescription: sessionKey === "viernes"
+              ? kettlebellPrescription(exercise)
+              : currentLevelDefinition.gymSets === 3 && (sessionKey === "lunes" || sessionKey === "miercoles")
+                ? exercise.prescription.replace(/^2 ×/, "3 ×")
+                : exercise.prescription,
           })),
         })),
   };
   const allExercises = session.blocks.flatMap((block, bi) => block.exercises.map((exercise, ei) => ({ ...exercise, id: `${today()}-${sessionKey}-${bi}-${ei}` })));
   const doneCount = allExercises.filter(e => store.checks[e.id]).length;
-  const donePercent = Math.round(doneCount / allExercises.length * 100);
+  const donePercent = allExercises.length ? Math.round(doneCount / allExercises.length * 100) : 0;
   const lastSevenDays = Array.from({ length: 7 }, (_, index) => {
     const date = new Date();
     date.setDate(date.getDate() - (6 - index));
@@ -773,14 +1022,49 @@ function App() {
     };
   });
 
-  const achievements = useMemo(() => [
-    { icon: "●", title: "Primer paso", text: "Completa tu primera sesión", earned: totalSessions >= 1 },
-    { icon: "III", title: "Racha de tres", text: "Muévete tres días seguidos", earned: streak >= 3 },
-    { icon: "−1", title: "Primer kilo", text: "Baja el primer kilo de la tendencia", earned: weightChange <= -1 },
-    { icon: "05", title: "Cinco sesiones", text: "Acumula cinco entrenamientos", earned: totalSessions >= 5 },
-    { icon: "♥", title: "Presión al día", text: "Registra cinco lecturas", earned: store.logs.filter(l => l.systolic && l.diastolic).length >= 5 },
-    { icon: "150", title: "Semana activa", text: "Alcanza 150 minutos semanales", earned: weekMinutes >= 150 },
-  ], [store.logs, totalSessions, streak, weightChange, weekMinutes]);
+  const pressureReadings = store.logs.filter(log => log.systolic && log.diastolic).length;
+  const weightMeasurements = store.logs.filter(log => log.weight).length;
+  const activeDays = new Set(store.logs.filter(log => log.sessionDone || log.activeMinutes > 0).map(log => log.date)).size;
+  const completedWalks = store.logs.filter(log => isWalkLog(log) && log.sessionDone).length;
+  const loadIncreases = Object.values(store.loads).filter(load => load.kg > load.initialKg).length;
+  const achievements = [
+    { category: "Inicio", icon: "●", title: "Primer paso", text: "Completa tu primera sesión", earned: totalSessions >= 1 },
+    { category: "Inicio", icon: "G", title: "Puerta del gimnasio", text: "Completa tu primer lunes o miércoles", earned: qualifiedGym >= 1 },
+    { category: "Inicio", icon: "K", title: "Doce kilos", text: "Completa tu primera sesión de kettlebell", earned: qualifiedKettlebell >= 1 },
+    { category: "Inicio", icon: "↗", title: "Primera caminata", text: "Registra una caminata del plan", earned: completedWalks >= 1 },
+    { category: "Constancia", icon: "05", title: "Cinco sesiones", text: "Acumula cinco entrenamientos", earned: totalSessions >= 5 },
+    { category: "Constancia", icon: "10", title: "Doble dígito", text: "Acumula diez entrenamientos", earned: totalSessions >= 10 },
+    { category: "Constancia", icon: "25", title: "Cuarto de centena", text: "Acumula 25 entrenamientos", earned: totalSessions >= 25 },
+    { category: "Constancia", icon: "50", title: "Cincuenta fuertes", text: "Acumula 50 entrenamientos", earned: totalSessions >= 50 },
+    { category: "Constancia", icon: "III", title: "Racha de tres", text: "Muévete tres días seguidos", earned: streak >= 3 },
+    { category: "Constancia", icon: "VII", title: "Semana encendida", text: "Muévete siete días seguidos", earned: streak >= 7 },
+    { category: "Salud", icon: "♥", title: "Presión al día", text: "Registra cinco lecturas", earned: pressureReadings >= 5 },
+    { category: "Salud", icon: "20", title: "Observador de tendencias", text: "Registra 20 lecturas de presión", earned: pressureReadings >= 20 },
+    { category: "Salud", icon: "○", title: "Balanza consciente", text: "Registra cuatro mediciones de peso", earned: weightMeasurements >= 4 },
+    { category: "Salud", icon: "12", title: "Tendencia visible", text: "Registra 12 mediciones de peso", earned: weightMeasurements >= 12 },
+    { category: "Salud", icon: "−1", title: "Primer kilo", text: "Baja el primer kilo de la tendencia", earned: weightChange <= -1 },
+    { category: "Actividad", icon: "150", title: "Semana activa", text: "Alcanza 150 minutos en una semana", earned: activeWeeks150 >= 1 },
+    { category: "Actividad", icon: "×4", title: "Mes activo", text: "Completa cuatro semanas de 150 minutos", earned: activeWeeks150 >= 4 },
+    { category: "Actividad", icon: "1K", title: "Mil minutos", text: "Acumula 1.000 minutos de actividad", earned: totalMinutes >= 1000 },
+    { category: "Actividad", icon: "3K", title: "Tres mil minutos", text: "Acumula 3.000 minutos de actividad", earned: totalMinutes >= 3000 },
+    { category: "Actividad", icon: "5K", title: "Cinco mil minutos", text: "Acumula 5.000 minutos de actividad", earned: totalMinutes >= 5000 },
+    { category: "Fuerza", icon: "+", title: "Primera carga", text: "Desbloquea un aumento controlado en máquina", earned: loadIncreases >= 1 },
+    { category: "Fuerza", icon: "III", title: "Carga progresiva", text: "Mejora la carga de tres ejercicios", earned: loadIncreases >= 3 },
+    { category: "Fuerza", icon: "20G", title: "Base de gimnasio", text: "Completa 20 sesiones de gimnasio", earned: qualifiedGym >= 20 },
+    { category: "Fuerza", icon: "10K", title: "Kettlebell constante", text: "Completa 10 sesiones con tu kettlebell", earned: qualifiedKettlebell >= 10 },
+    { category: "Evolución", icon: "II", title: "Preparado", text: "Alcanza el Nivel 2", earned: programLevel >= 2 },
+    { category: "Evolución", icon: "IV", title: "Ritmo estable", text: "Alcanza el Nivel 4", earned: programLevel >= 4 },
+    { category: "Evolución", icon: "VI", title: "Constancia", text: "Alcanza el Nivel 6", earned: programLevel >= 6 },
+    { category: "Evolución", icon: "VIII", title: "Ruta Fuerte", text: "Alcanza el Nivel 8", earned: programLevel >= 8 },
+  ];
+  const earnedAchievements = achievements.filter(achievement => achievement.earned).length;
+  const impulsePoints =
+    totalSessions * 100 +
+    activeDays * 20 +
+    pressureReadings * 10 +
+    weightMeasurements * 10 +
+    activeWeeks150 * 150 +
+    loadIncreases * 75;
 
   function toggleExercise(id: string) {
     setStore(current => ({ ...current, checks: { ...current.checks, [id]: !current.checks[id] } }));
@@ -968,7 +1252,7 @@ function App() {
       session: sessionKey, sessionDone: true,
     });
     setSessionForm({ weight: "", systolic: "", diastolic: "", activeMinutes: "", note: "" });
-    setSaveMessage(programLevel < 4 ? "Sesión guardada. Tu próximo nivel está más cerca." : "Sesión guardada. Nivel máximo consolidado.");
+    setSaveMessage(programLevel < 8 ? "Sesión guardada. Tu próximo nivel está más cerca." : "Sesión guardada. Hábito fuerte consolidado.");
     window.setTimeout(() => setSaveMessage(""), 3000);
   }
 
@@ -1170,16 +1454,23 @@ function App() {
                 </button>)}
               </div>
               <section className="unlock-panel" aria-label={`Progresión: nivel ${programLevel}`}>
-                <div className="level-orb"><small>NIVEL</small><strong>{programLevel}</strong><span>DE 4</span></div>
+                <div className="level-visual">
+                  <AvatarSprite level={programLevel} label={`Avatar del Nivel ${programLevel}: ${currentLevelDefinition.name}`} />
+                  <span className="avatar-level-chip">NIVEL <strong>{programLevel}</strong> / 8</span>
+                </div>
                 <div className="unlock-copy">
-                  <div><p className="eyebrow">{programLevel === 4 ? "Todo desbloqueado" : `Camino al Nivel ${programLevel + 1}`}</p><h3>{["Base segura", "Más resistencia", "Más volumen", "Hábito consolidado"][programLevel - 1]}</h3></div>
-                  {programLevel < 4 ? <>
+                  <div>
+                    <p className="eyebrow">{programLevel === 8 ? "Todo desbloqueado" : `Camino al Nivel ${programLevel + 1}`}</p>
+                    <h3>{currentLevelDefinition.name} · {currentLevelDefinition.phase}</h3>
+                    <p className="level-summary">{currentLevelDefinition.summary}</p>
+                  </div>
+                  {programLevel < 8 ? <>
                     <div className="unlock-progress"><i style={{width:`${unlockProgress}%`}}/><span>{unlockProgress}%</span></div>
                     <div className="unlock-requirements">
                       {requirements.map(item => <span className={item.value >= item.target ? "complete" : ""} key={item.label}><i>{item.value >= item.target ? "✓" : "○"}</i>{item.label}<b>{Math.min(item.value,item.target)}/{item.target}</b></span>)}
                     </div>
-                    <p className="unlock-reward">Al desbloquear: {programLevel === 1 ? "caminatas de 20 min y tercer día activo opcional." : programLevel === 2 ? "3 series, 3 vueltas de kettlebell y caminatas de 25 min." : "caminatas de 30 min y meta consolidada de 150 min semanales."}</p>
-                  </> : <p className="unlock-reward">Ya liberaste todo el plan. Mantén este nivel y prioriza la regularidad.</p>}
+                    <p className="unlock-reward"><strong>Al desbloquear:</strong> {nextLevelDefinition?.reward}</p>
+                  </> : <p className="unlock-reward">Ya liberaste todo el plan. Mantén este nivel, prioriza la regularidad y ajusta las cargas con tu equipo de salud.</p>}
                 </div>
               </section>
               <div className="exercise-list">
@@ -1381,13 +1672,45 @@ function App() {
 
         {view === "logros" && <div className="view">
           <PageTitle eyebrow="Evidencia de que avanzas" title="Mis logros" text="No todos los triunfos aparecen en la balanza. Aquí cuentan la constancia, la salud y el trabajo hecho." />
-          <section className="achievement-summary soft-card"><div><span>LOGROS DESBLOQUEADOS</span><strong>{achievements.filter(a => a.earned).length}<small> / {achievements.length}</small></strong></div><div className="big-progress"><i style={{width:`${achievements.filter(a=>a.earned).length/achievements.length*100}%`}}/></div><p>{achievements.filter(a=>a.earned).length === achievements.length ? "Los desbloqueaste todos. Es hora de definir nuevos hitos." : "El próximo se construye con una decisión pequeña hoy."}</p></section>
-          <section className="achievements-grid">{achievements.map(item => <article className={`soft-card achievement ${item.earned ? "earned" : ""}`} key={item.title}><span>{item.icon}</span><div><small>{item.earned ? "DESBLOQUEADO" : "AÚN BLOQUEADO"}</small><h3>{item.title}</h3><p>{item.text}</p></div>{item.earned && <i>✓</i>}</article>)}</section>
+          <section className="avatar-hero soft-card">
+            <div className="avatar-current">
+              <AvatarSprite level={programLevel} label={`Tu avatar actual, Nivel ${programLevel}: ${currentLevelDefinition.name}`} />
+              <span>NIVEL {programLevel} / 8</span>
+            </div>
+            <div className="avatar-hero-copy">
+              <p className="eyebrow">Tu versión Ruta Fuerte</p>
+              <h2>{currentLevelDefinition.name}</h2>
+              <strong>{currentLevelDefinition.phase}</strong>
+              <p>{currentLevelDefinition.summary} Tu cuerpo no es la recompensa: el avatar cambia por la constancia, la técnica y lo que ya puedes sostener.</p>
+              <div className="avatar-metrics">
+                <span><small>PUNTOS DE IMPULSO</small><strong>{impulsePoints.toLocaleString("es-CL")}</strong></span>
+                <span><small>SIGUIENTE EVOLUCIÓN</small><strong>{nextLevelDefinition ? `${unlockProgress}%` : "COMPLETA"}</strong></span>
+              </div>
+            </div>
+          </section>
+          <section className="evolution-route soft-card" aria-labelledby="evolution-route-title">
+            <div className="route-heading"><div><p className="eyebrow">Ocho etapas</p><h2 id="evolution-route-title">Tu ruta de evolución</h2></div><span>{programLevel} de 8 liberadas</span></div>
+            <ol>
+              {programLevels.map(level => <li
+                className={`${programLevel >= level.level ? "unlocked" : "locked"} ${programLevel === level.level ? "current" : ""}`}
+                key={level.level}
+              >
+                <AvatarSprite level={level.level} compact />
+                <span><small>NIVEL {level.level}</small><strong>{level.name}</strong><i>{programLevel >= level.level ? "✓" : "BLOQUEADO"}</i></span>
+              </li>)}
+            </ol>
+          </section>
+          <section className="achievement-summary soft-card">
+            <div><span>LOGROS DESBLOQUEADOS</span><strong>{earnedAchievements}<small> / {achievements.length}</small></strong></div>
+            <div className="big-progress"><i style={{width:`${earnedAchievements / achievements.length * 100}%`}}/></div>
+            <p>{earnedAchievements === achievements.length ? "Los desbloqueaste todos. Tu objetivo ahora es sostener el hábito." : "Cada registro suma Puntos de Impulso; ningún logro exige una semana perfecta."}</p>
+          </section>
+          <section className="achievements-grid">{achievements.map(item => <article className={`soft-card achievement ${item.earned ? "earned" : ""}`} key={item.title}><span>{item.icon}</span><div><small>{item.category} · {item.earned ? "DESBLOQUEADO" : "AÚN BLOQUEADO"}</small><h3>{item.title}</h3><p>{item.text}</p></div>{item.earned && <i>✓</i>}</article>)}</section>
           <section className="soft-card milestones"><h2>Hitos del camino</h2><Milestone label="Punto de partida" value={firstWeight || 110} active /><Milestone label="Primera meta · −5%" value={104.5} active={Boolean(currentWeight && currentWeight <= 104.5)} /><Milestone label="Segunda meta · −10%" value={99} active={Boolean(currentWeight && currentWeight <= 99)} /><p>Las metas pueden ajustarse con tu equipo de salud. Llegar más lento sigue siendo llegar.</p></section>
         </div>}
 
         {view === "plan" && <div className="view">
-          <PageTitle eyebrow="Tu mapa de ocho semanas" title="Plan completo" text="Dos días fuertes de gimnasio, una sesión corta en casa y caminatas que aumentan gradualmente." />
+          <PageTitle eyebrow="Tu mapa de ocho niveles" title="Plan completo" text="Dos días de gimnasio, una sesión en casa y caminatas que progresan solo cuando cumples el trabajo anterior." />
           <section className="profile-strip soft-card">
             <div><small>Estatura</small><strong>1,65 m</strong></div>
             <div><small>Punto de partida</small><strong>110 kg</strong></div>
@@ -1396,26 +1719,38 @@ function App() {
             <div><small>Contexto</small><strong>Trabajo sedentario</strong></div>
           </section>
           <section className="week-plan">
-            {[["LUN","MindFit","Fuerza A · 60 min"],["MAR","Caminar","15–30 min"],["MIÉ","MindFit","Fuerza B · 60 min"],["JUE","Recuperar","Caminata suave"],["VIE","Casa","Kettlebell · 25 min"],["SÁB","Caminar","15–30 min"],["DOM","Descanso","Moverse suave"]].map((d,i)=><article className={`soft-card ${[0,2,4].includes(i)?"focus":""}`} key={d[0]}><span>{d[0]}</span><h3>{d[1]}</h3><p>{d[2]}</p></article>)}
+            {[
+              ["LUN", "MindFit", `Fuerza A · ${currentLevelDefinition.gymSets} series`],
+              ["MAR", "Caminar", `${walkTarget} min · conversable`],
+              ["MIÉ", "MindFit", `Fuerza B · ${currentLevelDefinition.gymSets} series`],
+              ["JUE", programLevel >= 2 ? "Caminar" : "Recuperar", programLevel >= 2 ? `${walkTarget} min opcionales` : "Movilidad suave"],
+              ["VIE", "Casa", `Kettlebell · ${currentLevelDefinition.kettlebellRounds} vueltas`],
+              ["SÁB", programLevel >= 5 ? "Por bloques" : "Caminar", programLevel >= 5 ? `${walkTarget} min · sin jadear` : `${walkTarget} min · conversable`],
+              ["DOM", "Descanso", "Moverse suave"],
+            ].map((day, index) => <article className={`soft-card ${[0, 2, 4].includes(index) ? "focus" : ""}`} key={day[0]}><span>{day[0]}</span><h3>{day[1]}</h3><p>{day[2]}</p></article>)}
           </section>
           <section className="plan-grid">
-            <article className="soft-card plan-card"><p className="eyebrow">Progresión</p><h2>Subir sin apurarse</h2><div className="timeline">
-              <div className="unlocked"><span>✓</span><strong>Nivel 1 · Adaptar</strong><p>2 gimnasios, 1 kettlebell y caminatas de 15 minutos.</p></div>
-              <div className={programLevel >= 2 ? "unlocked" : "locked"}><span>{programLevel >= 2 ? "✓" : "🔒"}</span><strong>Nivel 2 · Construir</strong><p>Caminatas de 20 minutos y tercer día activo opcional.</p></div>
-              <div className={programLevel >= 3 ? "unlocked" : "locked"}><span>{programLevel >= 3 ? "✓" : "🔒"}</span><strong>Nivel 3 · Consolidar</strong><p>3 series, 3 vueltas de kettlebell y caminatas de 25 minutos.</p></div>
-              <div className={programLevel >= 4 ? "unlocked" : "locked"}><span>{programLevel >= 4 ? "✓" : "🔒"}</span><strong>Nivel 4 · Sostener</strong><p>Caminatas de 30 minutos y al menos 150 minutos semanales.</p></div>
+            <article className="soft-card plan-card progression-card"><p className="eyebrow">Progresión</p><h2>Subir sin apurarse</h2><div className="timeline">
+              {programLevels.map(level => <div className={`${programLevel >= level.level ? "unlocked" : "locked"} ${programLevel === level.level ? "current" : ""}`} key={level.level}>
+                <span>{programLevel >= level.level ? "✓" : "🔒"}</span>
+                <strong>Nivel {level.level} · {level.phase}</strong>
+                <p>{level.reward}</p>
+              </div>)}
             </div></article>
             <article className="soft-card plan-card"><p className="eyebrow">Alimentación</p><h2>Lo que mueve la balanza</h2><ul className="guideline-list"><li><span>½</span><div><strong>Verduras</strong><p>La mitad del plato en almuerzo y cena.</p></div></li><li><span>¼</span><div><strong>Proteína</strong><p>Pollo, pescado, huevos, legumbres o lácteos.</p></div></li><li><span>¼</span><div><strong>Carbohidrato</strong><p>Arroz, papa, pasta o legumbres en porción medida.</p></div></li><li><span>○</span><div><strong>Bebidas</strong><p>Agua como base; elimina bebidas azucaradas y limita alcohol.</p></div></li></ul></article>
             <article className="soft-card plan-card warning-card"><p className="eyebrow">Seguridad</p><h2>La presión manda</h2><div className="pressure-number">&gt;180 <small>o</small> &gt;120</div><p>No entrenes. Repite la lectura después de unos minutos y contacta a un profesional. Con dolor de pecho, falta de aire, debilidad, alteración visual o dificultad para hablar, busca atención urgente.</p><ul><li>Respira durante cada repetición.</li><li>No entrenes al fallo: deja 3–4 repeticiones en reserva.</li><li>Detente ante mareo, desmayo o falta de aire anormal.</li><li>Por ahora evita swings, snatches y press sobre la cabeza.</li></ul></article>
             <article className="soft-card plan-card"><p className="eyebrow">Hábitos base</p><h2>Lo pequeño suma</h2><ul className="habit-list"><li><i>01</i><span><strong>Interrumpe el asiento</strong>Camina 3–5 minutos por cada hora sentado.</span></li><li><i>02</i><span><strong>Duerme con horario</strong>La recuperación también forma parte del plan.</span></li><li><i>03</i><span><strong>Reduce el sodio</strong>Menos embutidos, snacks y comida preparada.</span></li><li><i>04</i><span><strong>No falles dos veces</strong>Si pierdes una sesión, vuelve en la siguiente.</span></li></ul></article>
           </section>
           <div className="medical-note"><strong>Importante:</strong> este plan es educativo y no sustituye la evaluación de tu médico. Con hipertensión y tu nivel actual de sedentarismo, confirma que puedes iniciar ejercicio y no cambies medicamentos por tu cuenta.</div>
+          <div className="medical-note"><strong>Equipo verificado:</strong> en casa el programa utiliza únicamente tu kettlebell de 12 kg, una silla firme y una pared. La página oficial de MindFit San Martín no publica un inventario de máquinas; confirma con el instructor el equipo disponible y usa una máquina equivalente para el mismo patrón si falta alguna.</div>
           <section className="sources">
             <p className="eyebrow">Fuentes y lugar de entrenamiento</p>
             <div>
               <a href="https://www.heart.org/en/health-topics/high-blood-pressure/changes-you-can-make-to-manage-high-blood-pressure/getting-active-to-control-high-blood-pressure" target="_blank" rel="noreferrer">American Heart Association · Actividad e hipertensión ↗</a>
               <a href="https://www.heart.org/en/health-topics/high-blood-pressure/understanding-blood-pressure-readings/when-to-call-911-for-high-blood-pressure" target="_blank" rel="noreferrer">American Heart Association · Lecturas de emergencia ↗</a>
-              <a href="https://www.who.int/europe/publications/i/item/9789240014886" target="_blank" rel="noreferrer">OMS · Actividad física y sedentarismo ↗</a>
+              <a href="https://www.who.int/publications/i/item/9789240015128" target="_blank" rel="noreferrer">OMS · Actividad física y sedentarismo ↗</a>
+              <a href="https://www.acsm.org/wp-content/uploads/2025/01/fitt-recommendations-for-hypertension_update.pdf" target="_blank" rel="noreferrer">ACSM · Prescripción FITT para hipertensión ↗</a>
+              <a href="https://www.heart.org/en/healthy-living/exercise-and-physical-activity/fitness-basics/strength-and-resistance-training-exercise" target="_blank" rel="noreferrer">American Heart Association · Entrenamiento de fuerza ↗</a>
               <a href="https://mindfit.cl/san-martin/" target="_blank" rel="noreferrer">MindFit San Martín ↗</a>
             </div>
           </section>

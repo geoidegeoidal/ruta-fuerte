@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test:guides": "node scripts/guide-coverage.mjs",
+    "test:progression": "node scripts/progression-check.mjs",
     "security:audit": "npm audit --omit=dev",
     "security:check": "node scripts/security-check.mjs"
   },

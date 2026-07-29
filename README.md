@@ -1,8 +1,8 @@
 # Ruta Fuerte
 
 Aplicación personal y responsive para consultar un plan de entrenamiento de
-ocho semanas, registrar actividad, presión arterial y peso, y seguir la
-evolución mediante métricas, gráficos y logros.
+ocho niveles, registrar actividad, presión arterial y peso, y seguir la
+evolución mediante métricas, gráficos, logros y un avatar retro-pixel.
 
 ## Funciones
 
@@ -11,8 +11,12 @@ evolución mediante métricas, gráficos y logros.
 - Checklist diario y temporizador de descansos.
 - Historial de peso, presión, actividad, pasos, agua, energía y notas.
 - Sincronización privada entre dispositivos mediante una cuenta personal.
-- Progresión desbloqueable de rutinas y cargas en kilos.
+- Ocho niveles desbloqueables con caminatas progresivas, fuerza y una sesión
+  por bloques que aparece al consolidar la base.
+- Progresión de cargas de máquina en kilos y volumen adaptado a una kettlebell
+  fija de 12 kg.
 - Evolución de peso, brechas semanales y logros.
+- 28 logros y Puntos de Impulso calculados desde el historial sincronizado.
 - Exportación e importación del historial en formato JSON.
 - Diseño Soft UI responsive y soporte para movimiento reducido.
 
