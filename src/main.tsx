@@ -9,9 +9,11 @@ import {
   writeCloudStore,
   type CloudUser,
 } from "./cloud";
+import "@fontsource-variable/manrope";
 import "./styles.css";
 
 type View = "hoy" | "historial" | "evolucion" | "logros" | "plan";
+type Theme = "light" | "dark";
 type SessionKey = "lunes" | "miercoles" | "viernes" | "caminar" | "recuperar";
 type LogEntry = {
   id: string;
@@ -44,9 +46,15 @@ type Exercise = {
 
 const STORE_KEY = "ruta-fuerte-data-v2";
 const STORE_OWNER_KEY = "ruta-fuerte-owner-v1";
+const THEME_KEY = "ruta-fuerte-theme-v1";
 const MAX_BACKUP_BYTES = 1_000_000;
 const MAX_NOTE_LENGTH = 500;
 const today = () => new Date().toLocaleDateString("en-CA");
+const loadTheme = (): Theme => {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved === "light" || saved === "dark") return saved;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+};
 const dateLabel = (date: string, full = false) =>
   new Intl.DateTimeFormat("es-CL", full
     ? { weekday: "long", day: "numeric", month: "long" }
@@ -330,6 +338,7 @@ function WeightChart({ logs }: { logs: LogEntry[] }) {
 
 function App() {
   const [store, setStore] = useState<Store>(loadStore);
+  const [theme, setTheme] = useState<Theme>(loadTheme);
   const [view, setView] = useState<View>("hoy");
   const [selectedDay, setSelectedDay] = useState(currentDayIndex);
   const [timer, setTimer] = useState(90);
@@ -346,6 +355,12 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem(THEME_KEY, theme);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#202733" : "#e3e8ef");
+  }, [theme]);
 
   useEffect(() => {
     if (!authChecked) return;
@@ -732,8 +747,68 @@ function App() {
     reader.readAsText(file);
   }
 
+  const themeToggle = (
+    <button
+      className="theme-toggle"
+      type="button"
+      aria-label={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo noche"}
+      aria-pressed={theme === "dark"}
+      onClick={() => setTheme(current => current === "dark" ? "light" : "dark")}
+    >
+      <span aria-hidden="true">{theme === "dark" ? "☾" : "☀"}</span>
+    </button>
+  );
+
+  const authForm = !cloudConfigured
+    ? <div className="auth-message error">La sincronización todavía no está configurada en esta versión.</div>
+    : <div className="auth-form">
+        {googleAuthEnabled && <>
+          <button className="google-action" type="button" disabled={authBusy} onClick={startGoogleSignIn}>
+            <span aria-hidden="true">G</span> CONTINUAR CON GOOGLE
+          </button>
+          <div className="auth-divider"><span>o usa tu correo</span></div>
+        </>}
+        <label>Correo<input type="email" inputMode="email" autoComplete="email" maxLength={254} spellCheck={false} value={authEmail} onChange={event => setAuthEmail(event.target.value)} placeholder="tu@correo.cl" /></label>
+        <label>Contraseña<input type="password" autoComplete="current-password" minLength={12} maxLength={128} spellCheck={false} value={authPassword} onChange={event => setAuthPassword(event.target.value)} placeholder="12+ · Aa1!" /></label>
+        {authMessage && <div className="auth-message" role="status">{authMessage}</div>}
+        <button className="primary full" type="button" disabled={authBusy} onClick={() => submitAuth("signin")}>{authBusy ? "CONECTANDO…" : "INICIAR SESIÓN"}</button>
+        <button className="secondary-action" type="button" disabled={authBusy} onClick={() => submitAuth("signup")}>CREAR CUENTA</button>
+      </div>;
+
   if (!authChecked) {
     return <main className="security-loading" aria-live="polite"><div className="cloud-orb">RF</div><strong>Protegiendo tus datos…</strong></main>;
+  }
+
+  if (!cloudUser) {
+    return (
+      <main className="auth-gate">
+        <div className="auth-gate-theme">{themeToggle}</div>
+        <section className="auth-gate-card" aria-labelledby="welcome-auth-title">
+          <div className="auth-gate-story">
+            <button className="logo auth-logo" type="button" aria-label="Ruta Fuerte"><span>RF</span><strong>Ruta Fuerte</strong></button>
+            <div>
+              <p className="eyebrow">Tu ruta, siempre contigo</p>
+              <h1>Avanza.<br />Registra.<br /><em>Desbloquea.</em></h1>
+              <p>Tu progreso queda protegido y sincronizado para continuar desde el celular o el computador.</p>
+            </div>
+            <ul className="auth-benefits">
+              <li><i>✓</i><span><strong>Sesión recordada</strong>Entras una vez en este equipo.</span></li>
+              <li><i>↻</i><span><strong>Sincronización privada</strong>Tus registros viajan contigo.</span></li>
+              <li><i>↑</i><span><strong>Progreso acumulado</strong>Cargas, logros y evolución.</span></li>
+            </ul>
+          </div>
+          <div className="auth-gate-panel">
+            <div className="cloud-orb">☁</div>
+            <p className="eyebrow">Primera visita</p>
+            <h2 id="welcome-auth-title">Entra o crea tu cuenta.</h2>
+            <p>Después recordaremos tu sesión en este equipo. Si cierras sesión, borraremos la copia local de tus datos.</p>
+            {authForm}
+            <small className="privacy-copy">Cada cuenta solo puede leer y modificar sus propios registros.</small>
+            <footer className="legal-links"><a href="./privacy.html">Privacidad</a><a href="./terms.html">Términos</a></footer>
+          </div>
+        </section>
+      </main>
+    );
   }
 
   const nav: { key: View; label: string; icon: string }[] = [
@@ -747,7 +822,7 @@ function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <button className="logo" onClick={() => setView("hoy")} aria-label="Ruta Fuerte, inicio"><span>RF</span><strong>Ruta Fuerte</strong></button>
+        <div className="brand-row"><button className="logo" onClick={() => setView("hoy")} aria-label="Ruta Fuerte, inicio"><span>RF</span><strong>Ruta Fuerte</strong></button>{themeToggle}</div>
         <nav aria-label="Secciones">
           {nav.map(item => <button key={item.key} className={view === item.key ? "active" : ""} onClick={() => setView(item.key)}>
             <i>{item.icon}</i><span>{item.label}</span>
@@ -767,7 +842,7 @@ function App() {
       <main className="content">
         <header className="mobile-header">
           <button className="logo" onClick={() => setView("hoy")}><span>RF</span><strong>Ruta Fuerte</strong></button>
-          <div className="mobile-tools"><div className="streak-pill">◉ {streak} días</div><button className={`mobile-cloud ${syncStatus}`} onClick={() => setAuthOpen(true)} aria-label={cloudUser ? "Datos sincronizados" : "Conectar datos"}>{cloudUser ? "☁" : "↥"}</button></div>
+          <div className="mobile-tools"><div className="streak-pill">◉ {streak} días</div>{themeToggle}<button className={`mobile-cloud ${syncStatus}`} onClick={() => setAuthOpen(true)} aria-label="Datos sincronizados">☁</button></div>
         </header>
 
         {view === "hoy" && <div className="view">
@@ -985,32 +1060,12 @@ function App() {
           <section className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
             <button className="modal-close" onClick={() => setAuthOpen(false)} aria-label="Cerrar">×</button>
             <div className="cloud-orb">☁</div>
-            {cloudUser ? <>
-              <p className="eyebrow">Nube personal activa</p>
-              <h2 id="auth-title">Tus datos están contigo.</h2>
-              <p>Los cambios de este dispositivo se guardan en tu cuenta y aparecerán al iniciar sesión desde el celular o computador.</p>
-              <div className={`sync-detail ${syncStatus}`}><i>{syncStatus === "syncing" ? "↻" : syncStatus === "error" ? "!" : "✓"}</i><span><strong>{syncStatus === "syncing" ? "Sincronizando cambios" : syncStatus === "error" ? "No se pudo sincronizar" : "Todo sincronizado"}</strong><small>{cloudUser.email}</small></span></div>
-              {authMessage && <div className="auth-message">{authMessage}</div>}
-              <button className="secondary-action" onClick={signOutSecurely}>CERRAR SESIÓN Y BORRAR DATOS DE ESTE EQUIPO</button>
-            </> : <>
-              <p className="eyebrow">Sincronización privada</p>
-              <h2 id="auth-title">Continúa en cualquier dispositivo.</h2>
-              <p>Crea una cuenta para guardar peso, presión, sesiones y cargas. Los registros que ya tienes en este navegador se subirán al conectarte.</p>
-              {!cloudConfigured ? <div className="auth-message error">La sincronización todavía no está configurada en esta versión.</div> : <div className="auth-form">
-                {googleAuthEnabled && <>
-                  <button className="google-action" disabled={authBusy} onClick={startGoogleSignIn}>
-                    <span aria-hidden="true">G</span> CONTINUAR CON GOOGLE
-                  </button>
-                  <div className="auth-divider"><span>o usa tu correo</span></div>
-                </>}
-                <label>Correo<input type="email" inputMode="email" autoComplete="email" maxLength={254} spellCheck={false} value={authEmail} onChange={event => setAuthEmail(event.target.value)} placeholder="tu@correo.cl" /></label>
-                <label>Contraseña<input type="password" autoComplete="current-password" minLength={12} maxLength={128} spellCheck={false} value={authPassword} onChange={event => setAuthPassword(event.target.value)} placeholder="12+ · Aa1!" /></label>
-                {authMessage && <div className="auth-message">{authMessage}</div>}
-                <button className="primary full" disabled={authBusy} onClick={() => submitAuth("signin")}>{authBusy ? "CONECTANDO…" : "INICIAR SESIÓN"}</button>
-                <button className="secondary-action" disabled={authBusy} onClick={() => submitAuth("signup")}>CREAR CUENTA</button>
-              </div>}
-              <small className="privacy-copy">La aplicación usa una tabla privada: tu cuenta solamente puede leer y modificar sus propios datos.</small>
-            </>}
+            <p className="eyebrow">Nube personal activa</p>
+            <h2 id="auth-title">Tus datos están contigo.</h2>
+            <p>Los cambios de este dispositivo se guardan en tu cuenta y aparecerán al iniciar sesión desde el celular o computador.</p>
+            <div className={`sync-detail ${syncStatus}`}><i>{syncStatus === "syncing" ? "↻" : syncStatus === "error" ? "!" : "✓"}</i><span><strong>{syncStatus === "syncing" ? "Sincronizando cambios" : syncStatus === "error" ? "No se pudo sincronizar" : "Todo sincronizado"}</strong><small>{cloudUser.email}</small></span></div>
+            {authMessage && <div className="auth-message">{authMessage}</div>}
+            <button className="secondary-action" onClick={signOutSecurely}>CERRAR SESIÓN Y BORRAR DATOS DE ESTE EQUIPO</button>
           </section>
         </div>}
 
