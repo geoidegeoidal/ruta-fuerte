@@ -1323,7 +1323,7 @@ function App() {
               <div className="load-summary"><strong>{loadCatalog.filter(exercise => (store.loads[exercise.name]?.kg ?? exercise.load!.initial) > (store.loads[exercise.name]?.initialKg ?? exercise.load!.initial)).length}</strong><span>ejercicios<br/>con avance</span></div>
             </div>
             <div className="load-progress-list">
-              {loadCatalog.map(exercise => {
+              {loadCatalog.filter(exercise => !exercise.load!.fixed).map(exercise => {
                 const progress = store.loads[exercise.name];
                 const current = progress?.kg ?? exercise.load!.initial;
                 const initial = progress?.initialKg ?? exercise.load!.initial;
@@ -1346,12 +1346,10 @@ function App() {
                     <i className="load-arrow" aria-hidden="true">→</i>
                     <span className="current"><small>AHORA</small><strong>{current}<i> kg</i></strong></span>
                   </div>
-                  {exercise.load!.fixed
-                    ? <div className="fixed-load-path"><span aria-hidden="true">12</span><p><strong>El peso no cambia.</strong> Avanza sumando repeticiones o vueltas con técnica controlada.</p></div>
-                    : <div className="validation-path">
-                        <div><span role="progressbar" aria-label={`Validaciones técnicas de ${exercise.name}`} aria-valuemin={0} aria-valuemax={2} aria-valuenow={validations}><i style={{width:`${validations / 2 * 100}%`}}/></span><strong>{validations}/2 validaciones</strong></div>
-                        <p>{validations === 1 ? `Una sesión técnica más libera ${current + exercise.load!.step} kg.` : `Valida 2 sesiones cómodas para liberar ${current + exercise.load!.step} kg.`}</p>
-                      </div>}
+                  <div className="validation-path">
+                    <div><span role="progressbar" aria-label={`Validaciones técnicas de ${exercise.name}`} aria-valuemin={0} aria-valuemax={2} aria-valuenow={validations}><i style={{width:`${validations / 2 * 100}%`}}/></span><strong>{validations}/2 validaciones</strong></div>
+                    <p>{validations === 1 ? `Una sesión técnica más libera ${current + exercise.load!.step} kg.` : `Valida 2 sesiones cómodas para liberar ${current + exercise.load!.step} kg.`}</p>
+                  </div>
                   <div className="load-trail">
                     <small>ÚLTIMOS CAMBIOS</small>
                     {history.length
@@ -1361,6 +1359,17 @@ function App() {
                 </article>;
               })}
             </div>
+            <article className="fixed-load-summary">
+              <div className="fixed-kettlebell-mark"><small>CARGA FIJA</small><strong>12<i> kg</i></strong></div>
+              <div className="fixed-load-copy">
+                <p className="eyebrow">Tu kettlebell</p>
+                <h3>El peso se mantiene; tu capacidad aumenta</h3>
+                <p>Con la kettlebell disponible progresas sumando repeticiones o vueltas, siempre con respiración continua y técnica controlada.</p>
+              </div>
+              <div className="fixed-exercise-list">
+                {loadCatalog.filter(exercise => exercise.load!.fixed).map(exercise => <span key={exercise.name}>{exercise.name}</span>)}
+              </div>
+            </article>
             <p className="chart-caption">Las cargas de máquina son referencias editables. El mecanismo de cada máquina cambia cuánto esfuerzo representan realmente esos kilos.</p>
           </section>
           <section className="insights-grid">
